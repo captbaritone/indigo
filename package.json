@@ -16,5 +16,8 @@
   "dependencies": {
     "typescript": "^4.9.3"
   },
-  "prettier": {}
+  "prettier": {
+    "trailingComma": "all",
+    "tabWidth": 2
+  }
 }
