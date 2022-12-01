@@ -3,7 +3,6 @@ import { strict as assert } from "node:assert";
 
 import { FunctionContext, ModuleContext } from ".";
 import { Mut, NumType } from "./types";
-import { textSpanContainsTextSpan } from "typescript";
 
 test("Echo", async (t) => {
   const context = new ModuleContext();
@@ -98,20 +97,6 @@ test("Global", async (t) => {
 });
 
 test("Tiny compiler", async () => {
-  function compile(exp: FunctionContext, node: any) {
-    switch (node.type) {
-      case "num":
-        exp.i32Const(node.value);
-        break;
-      case "add":
-        compile(exp, node.left);
-        compile(exp, node.right);
-        exp.i32Add();
-        break;
-      default:
-        throw new Error(`Unknown node type: ${node.type}`);
-    }
-  }
   const ctx = new ModuleContext();
   ctx.declareFunction({
     name: "run",
@@ -119,14 +104,42 @@ test("Tiny compiler", async () => {
     results: [NumType.I32],
     export: true,
   });
+
+  const ast = {
+    type: "add",
+    left: { type: "num", value: 6 },
+    right: {
+      type: "sub",
+      left: { type: "num", value: 10 },
+      right: { type: "num", value: 12 },
+    },
+  };
+
   ctx.defineFunction("run", (exp) => {
-    compile(exp, {
-      type: "add",
-      left: { type: "num", value: 1 },
-      right: { type: "num", value: 2 },
-    });
+    compile(exp, ast);
   });
 
   const instance = await ctx.getInstance();
-  assert.equal(instance.exports.run(), 3);
+  assert.equal(instance.exports.run(), 4);
 });
+
+// A tiny compiler
+function compile(exp: FunctionContext, node: any) {
+  switch (node.type) {
+    case "num":
+      exp.i32Const(node.value);
+      break;
+    case "add":
+      compile(exp, node.left);
+      compile(exp, node.right);
+      exp.i32Add();
+      break;
+    case "sub":
+      compile(exp, node.left);
+      compile(exp, node.right);
+      exp.i32Sub();
+      break;
+    default:
+      throw new Error(`Unknown node type: ${node.type}`);
+  }
+}

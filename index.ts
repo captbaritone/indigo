@@ -436,16 +436,37 @@ export class FunctionContext {
   /**
    * Control Instructions
    *
+   * Control instructions have varying encodings. For structured instructions,
+   * the instruction sequences forming nested blocks are terminated with
+   * explicit opcodes for end and else.
+   *
+   * Block types are encoded in special compressed form, by either the byte 0x40
+   * indicating the empty type, as a single value type, or as a type index
+   * encoded as a positive signed integer.
+   *
+   * Note:
+   *
+   * The else opcode 0x05 in the encoding of an if instruction can be omitted if
+   * the following instruction sequence is empty.
+   *
+   * Unlike any other occurrence, the type index in a block type is encoded as a
+   * positive signed integer, so that its signed LEB128 bit pattern cannot
+   * collide with the encoding of value types or the special code , which
+   * correspond to the LEB128 encoding of negative integers. To avoid any loss
+   * in the range of allowed indices, it is treated as a 33 bit signed integer.
+   *
    * https://webassembly.github.io/spec/core/binary/instructions.html#control-instructions
    */
   unreachable() {
-    throw new Error("Unimplemented");
+    this._bytes.push(0x00);
   }
   nop() {
-    throw new Error("Unimplemented");
+    this._bytes.push(0x01);
   }
   block() {
-    throw new Error("Unimplemented");
+    this._bytes.push(0x02);
+    throw new Error("Not implemented");
+    this._bytes.push(0x0b);
   }
   loop() {
     throw new Error("Unimplemented");
@@ -466,7 +487,7 @@ export class FunctionContext {
     throw new Error("Unimplemented");
   }
   return() {
-    throw new Error("Unimplemented");
+    this._bytes.push(0x0f);
   }
   call(name: string) {
     const index = this._ctx._functionNames[name];
@@ -483,6 +504,8 @@ export class FunctionContext {
   /**
    * Reference Instructions
    *
+   * Reference instructions are represented by single byte codes.
+   *
    * https://webassembly.github.io/spec/core/binary/instructions.html#reference-instructions
    */
 
@@ -490,6 +513,8 @@ export class FunctionContext {
 
   /**
    * Parametric Instructions
+   *
+   * Parametric instructions are represented by single byte codes, possibly followed by a type annotation.
    *
    * https://webassembly.github.io/spec/core/binary/instructions.html#parametric-instructions
    */
@@ -531,6 +556,9 @@ export class FunctionContext {
   /**
    * Table Instructions
    *
+   * Table instructions are represented either by a single byte or a one byte
+   * prefix followed by a variable-length unsigned integer.
+   *
    * https://webassembly.github.io/spec/core/binary/instructions.html#table-instructions
    */
 
@@ -538,6 +566,15 @@ export class FunctionContext {
 
   /**
    * Memory Instructions
+   *
+   * Each variant of memory instruction is encoded with a different byte code.
+   * Loads and stores are followed by the encoding of their memarg immediate.
+   *
+   * Note:
+   *
+   * In future versions of WebAssembly, the additional zero bytes occurring in
+   * the encoding of the memory.size, memory.grow, memory.copy, and memory.fill
+   * instructions may be used to index additional memories.
    *
    * https://webassembly.github.io/spec/core/binary/instructions.html#memory-instructions
    */
@@ -547,21 +584,108 @@ export class FunctionContext {
   /**
    * Numeric Instructions
    *
+   * All variants of numeric instructions are represented by separate byte
+   * codes.
+   *
    * https://webassembly.github.io/spec/core/binary/instructions.html#numeric-instructions
+   */
+
+  /**
+   * The const instructions are followed by the respective literal.
    */
   i32Const(n: number) {
     this._bytes.push(0x41);
     this._bytes.push(...encodeI32(n));
   }
-
-  // TODO
-
-  i32Add() {
-    this._bytes.push(0x6a);
+  i64Const(n: number) {
+    this._bytes.push(0x42);
+    throw new Error("Unimplemented");
+  }
+  f32Const(n: number) {
+    this._bytes.push(0x43);
+    throw new Error("Unimplemented");
+  }
+  f64Const(n: number) {
+    this._bytes.push(0x44);
+    throw new Error("Unimplemented");
   }
 
   /**
+   * All other numeric instructions are plain opcodes without any immediates.
+   */
+  i32Clz() {
+    this._bytes.push(0x67);
+  }
+  i32Ctz() {
+    this._bytes.push(0x68);
+  }
+  i32PopCnt() {
+    this._bytes.push(0x69);
+  }
+  i32Add() {
+    this._bytes.push(0x6a);
+  }
+  i32Sub() {
+    this._bytes.push(0x6b);
+  }
+  i32Mul() {
+    this._bytes.push(0x6c);
+  }
+  i32DivS() {
+    this._bytes.push(0x6d);
+  }
+  i32DivU() {
+    this._bytes.push(0x6e);
+  }
+  i32RemS() {
+    this._bytes.push(0x6f);
+  }
+  i32RemU() {
+    this._bytes.push(0x70);
+  }
+  i32And() {
+    this._bytes.push(0x71);
+  }
+  i32Or() {
+    this._bytes.push(0x72);
+  }
+  i32Xor() {
+    this._bytes.push(0x73);
+  }
+  i32Shl() {
+    this._bytes.push(0x74);
+  }
+  i32ShrS() {
+    this._bytes.push(0x75);
+  }
+  i32ShrU() {
+    this._bytes.push(0x76);
+  }
+  i32Rotl() {
+    this._bytes.push(0x77);
+  }
+  i32Rotr() {
+    this._bytes.push(0x78);
+  }
+
+  // TODO
+
+  /**
+   * The saturating truncation instructions all have a one byte prefix, whereas
+   * the actual opcode is encoded by a variable-length unsigned integer.
+   */
+
+  // TODO
+
+  /**
    * Vector Instructions
+   *
+   * All variants of vector instructions are represented by separate byte codes.
+   * They all have a one byte prefix, whereas the actual opcode is encoded by a
+   * variable-length unsigned integer.
+   *
+   * Vector loads and stores are followed by the encoding of their memarg
+   * immediate.
    *
    * https://webassembly.github.io/spec/core/binary/instructions.html#vector-instructions
    */
