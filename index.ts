@@ -1,6 +1,5 @@
 import {
   FuncType,
-  NumType,
   ResultType,
   ValType,
   Export,
@@ -8,6 +7,8 @@ import {
   Code,
   LocalDeclaration,
   Expression,
+  GlobalType,
+  Global,
 } from "./types";
 
 type FunctionDeclaration = {
@@ -32,13 +33,26 @@ export class ModuleContext {
   _functions: number[] = []; // funcidx[]
   _exports: Export[] = [];
   _code: FunctionContext[] = [];
+  _functionNames: { [name: string]: number } = {};
+  _globals: Global[] = [];
+  _globalNames: { [name: string]: number } = {};
 
-  declareFunction(func: FunctionDeclaration): FunctionContext {
+  declareFunction(func: FunctionDeclaration) {
     const nextFuncTypeIndex = this._funcTypes.length;
-    const functionContext = new FunctionContext(func.params, func.results);
+    const functionContext = new FunctionContext(
+      this,
+      func.params,
+      func.results,
+    );
     this._funcTypes.push(functionContext.getFuncType());
     const nextFuncIndex = this._functions.length;
     this._functions.push(nextFuncTypeIndex);
+
+    if (this._functionNames.hasOwnProperty(func.name)) {
+      throw new Error(`Function name "${func.name}" already exists`);
+    }
+
+    this._functionNames[func.name] = nextFuncIndex;
 
     // TODO: What about export order? I think exports need to come first?
     if (func.export) {
@@ -49,7 +63,23 @@ export class ModuleContext {
       });
     }
     this._code.push(functionContext);
-    return functionContext;
+  }
+
+  defineFunction(name: string, cb: (func: FunctionContext) => void) {
+    const index = this._functionNames[name];
+    const func = this._code[index];
+    if (func == null) {
+      throw new Error(`Function "${name}" does not exist`);
+    }
+    cb(func);
+  }
+
+  declareGlobal(global: Global) {
+    if (this._globalNames.hasOwnProperty(global.name)) {
+      throw new Error(`Global name "${global.name}" already exists`);
+    }
+    this._globalNames[global.name] = this._globals.length;
+    this._globals.push(global);
   }
 
   /**
@@ -64,25 +94,37 @@ export class ModuleContext {
     this._writeMagic();
     this._writeVersion();
 
-    this._writeTypesSection(); // Required
-
+    // Individual sections are encoded as follows:
+    // https://webassembly.github.io/spec/core/binary/modules.html#sections
+    this._writeTypesSection();
     this._writeImportsSection();
-    this._writeFunctionsSection(); // Required
-    this._writeMemoriesSection();
+    this._writeFunctionsSection();
+    this._writeMemorySection();
     this._writeGlobalsSection();
-
-    this._writeExportsSection(); // Required
-    // TODO: Start section
-    // TODO: Element section
-    this._writeCodeSection(); // Required
+    this._writeExportsSection();
+    // this._writeStartSection();
+    // this._writeElementsSection();
+    this._writeCodeSection();
+    // this._writeDataSection();
+    // this._writeDataCountSection();
     return new Uint8Array(this._bytes);
   }
 
+  /**
+   * Convenience method for getting a compiled Wasm module.
+   */
   async getModule(): Promise<WebAssembly.Module> {
     const bytes = this.compile();
     return await WebAssembly.compile(bytes);
   }
 
+  /**
+   * Convenience method for compiling the Wasm module and instantiating an instance.
+   *
+   * Note: If you are going to create multiple instances of the same module, it
+   * is preferable to use `.getModule()` and then instantiate the module
+   * multiple times.
+   */
   async getInstance(): Promise<WebAssembly.Instance> {
     const mod = await this.getModule();
     return await WebAssembly.instantiate(mod);
@@ -110,7 +152,7 @@ export class ModuleContext {
    * https://webassembly.github.io/spec/core/binary/modules.html#type-section
    */
   _writeTypesSection() {
-    this._writeSection(1, () => {
+    this._writeSection(0x01, () => {
       this._writeVec(this._funcTypes, (funcType) => {
         this._writeFunctionType(funcType);
       });
@@ -135,9 +177,29 @@ export class ModuleContext {
     });
   }
 
-  _writeMemoriesSection() {}
+  _writeMemorySection() {}
 
-  _writeGlobalsSection() {}
+  /**
+   * The global section has the id 6. It decodes into a vector of globals that
+   * represent the  component of a module.
+   *
+   * https://webassembly.github.io/spec/core/binary/modules.html#global-section
+   */
+  _writeGlobalsSection() {
+    this._writeSection(0x06, () => {
+      this._writeVec(this._globals, (global) => this._writeGlobal(global));
+    });
+  }
+
+  _writeGlobal(global: Global) {
+    this._writeGlobalType(global.globalType);
+    this._writeExpression(global.init);
+  }
+
+  _writeGlobalType(globalType: GlobalType) {
+    this._writeValType(globalType.type);
+    this._writeByte(globalType.mut);
+  }
 
   /**
    * The export section has the id 7. It decodes into a vector of exports that
@@ -348,13 +410,20 @@ export class ModuleContext {
  * Class for building up a Wasm function.
  */
 export class FunctionContext {
+  _ctx: ModuleContext;
   _locals: LocalDeclaration[] = [];
   _bytes: number[] = [];
   _params: ValType[];
   _results: ValType[];
+  // Map of locals (params and locals) to their index.
   _variables: { [name: string]: number } = {};
 
-  constructor(params: { [name: string]: ValType }, results: ValType[]) {
+  constructor(
+    ctx: ModuleContext,
+    params: { [name: string]: ValType },
+    results: ValType[],
+  ) {
+    this._ctx = ctx;
     this._params = Object.values(params);
     this._results = results;
     const paramNames = Object.keys(params);
@@ -364,23 +433,140 @@ export class FunctionContext {
     }
   }
 
-  // Wrapper around local.get which accepts a named variable.
-  localGet(name: string) {
-    this._bytes.push(0x20);
-    const index = this._variables[name];
-    if (index == null) {
-      throw new Error(`Unknown variable ${name}`);
+  /**
+   * Control Instructions
+   *
+   * https://webassembly.github.io/spec/core/binary/instructions.html#control-instructions
+   */
+  unreachable() {
+    throw new Error("Unimplemented");
+  }
+  nop() {
+    throw new Error("Unimplemented");
+  }
+  block() {
+    throw new Error("Unimplemented");
+  }
+  loop() {
+    throw new Error("Unimplemented");
+  }
+  if() {
+    throw new Error("Unimplemented");
+  }
+  ifElse() {
+    throw new Error("Unimplemented");
+  }
+  br() {
+    throw new Error("Unimplemented");
+  }
+  brIf() {
+    throw new Error("Unimplemented");
+  }
+  brTable() {
+    throw new Error("Unimplemented");
+  }
+  return() {
+    throw new Error("Unimplemented");
+  }
+  call(name: string) {
+    const index = this._ctx._functionNames[name];
+    if (index === undefined) {
+      throw new Error(`Function ${name} not found`);
     }
-    this._bytes.push(...encodeU32(index));
+    this._bytes.push(0x10);
+    this._writeU32(index);
+  }
+  callIndirect() {
+    throw new Error("Unimplemented");
   }
 
+  /**
+   * Reference Instructions
+   *
+   * https://webassembly.github.io/spec/core/binary/instructions.html#reference-instructions
+   */
+
+  // TODO
+
+  /**
+   * Parametric Instructions
+   *
+   * https://webassembly.github.io/spec/core/binary/instructions.html#parametric-instructions
+   */
+
+  // TODO
+
+  /**
+   * Variable Instructions
+   *
+   * Variable instructions are concerned with access to local or global variables.
+   *
+   * These instructions get or set the values of variables, respectively. The local.tee
+   * instruction is like local.set but also returns its argument.
+   *
+   * https://webassembly.github.io/spec/core/binary/instructions.html#variable-instructions
+   */
+  localGet(name: string) {
+    this._bytes.push(0x20);
+    this._writeVariableIndex(name);
+  }
+  localSet(name: string) {
+    this._bytes.push(0x21);
+    this._writeVariableIndex(name);
+  }
+  localTee(name: string) {
+    this._bytes.push(0x22);
+    this._writeVariableIndex(name);
+  }
+  globalGet(name: string) {
+    this._bytes.push(0x23);
+    this._writeGlobalIndex(name);
+  }
+  globalSet(name: string) {
+    this._bytes.push(0x24);
+    // TODO: We could ensure the global is mutable here.
+    this._writeGlobalIndex(name);
+  }
+
+  /**
+   * Table Instructions
+   *
+   * https://webassembly.github.io/spec/core/binary/instructions.html#table-instructions
+   */
+
+  // TODO
+
+  /**
+   * Memory Instructions
+   *
+   * https://webassembly.github.io/spec/core/binary/instructions.html#memory-instructions
+   */
+
+  // TODO
+
+  /**
+   * Numeric Instructions
+   *
+   * https://webassembly.github.io/spec/core/binary/instructions.html#numeric-instructions
+   */
   i32Const(n: number) {
     this._bytes.push(0x41);
     this._bytes.push(...encodeI32(n));
   }
+
+  // TODO
+
   i32Add() {
     this._bytes.push(0x6a);
   }
+
+  /**
+   * Vector Instructions
+   *
+   * https://webassembly.github.io/spec/core/binary/instructions.html#vector-instructions
+   */
+
+  // TODO
 
   defineLocal(name: string, type: ValType) {
     if (this._variables.hasOwnProperty(name)) {
@@ -404,6 +590,27 @@ export class FunctionContext {
       params: this._params,
       results: this._results,
     };
+  }
+
+  // Writes the index of a param or local
+  _writeVariableIndex(name: string) {
+    const index = this._variables[name];
+    if (index == null) {
+      throw new Error(`Unknown variable ${name}`);
+    }
+    this._writeU32(index);
+  }
+
+  _writeGlobalIndex(name: string) {
+    const index = this._ctx._globalNames[name];
+    if (index == null) {
+      throw new Error(`Unknown global ${name}`);
+    }
+    this._writeU32(index);
+  }
+
+  _writeU32(n: number) {
+    this._bytes.push(...encodeU32(n));
   }
 }
 

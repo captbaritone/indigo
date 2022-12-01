@@ -38,6 +38,19 @@ export type ValType = NumType | VecType | RefType;
  */
 export type ResultType = ValType[];
 
+// TODO: Consider renaming since there's a global type by this name
+export type Global = { name: string; globalType: GlobalType; init: Expression };
+
+export enum Mut {
+  CONST = 0x00,
+  VAR = 0x01,
+}
+
+export type GlobalType = {
+  type: ValType;
+  mut: Mut;
+};
+
 /**
  * https://webassembly.github.io/spec/core/binary/types.html#function-types
  */

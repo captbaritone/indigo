@@ -2,18 +2,20 @@
 
 Indigo (codename, to be renamed before release) is a light-weight TypeScript
 module that makes it easy to construct binary WebAssembly modules from
-TypeScript. It's intended for use cases where you are comfortable writing raw
-Wasm instructions, but 
+TypeScript in the browser or Node. It's intended for use cases where you are
+comfortable writing raw Wasm instructions, but want to have some structure:
 
 - Provides type safety for WebAssembly instructions
-- Binary encoding of instructions/values
-- Juggling variable/function/global indexes
-- Module encoding/structure
+- Handles binary encoding of instructions/values
+- Handles juggling variable/function/global indexes
+- Handles module encoding/structure
 
 Indigo is intended for use cases such as just-in-time compilation (JIT), where
 the Wasm module is constructed at runtime. For example, if you want to provide a
 user-accessible domain specific language (DSL) for your users which compiles to
-Wasm.
+Wasm. This this end, Indigo is light weight and optimizes for simplicity and
+construction speed rather than the size or performance of the resulting Wasm
+module.
 
 ## Examples
 
@@ -75,15 +77,14 @@ compile({
 
 const instance = await ctx.getInstance();
 assert.equal(instance.exports.run(), 3);
-
 ```
-
 
 ## TODO
 
 - [ ] Guard against out of bounds integers
 - [ ] Support imports
-- [ ] Support globals
+- [ ] Support global exports
+- [ ] Proper support for global initialization code
 - [ ] Support memory
 - [ ] Support tables
 - [ ] Explore named functions/calling functions by name
