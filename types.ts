@@ -83,3 +83,19 @@ export type Code = {
 };
 
 export type Expression = number[];
+
+export type BlockType =
+  | {
+      kind: "EMPTY";
+    }
+  | {
+      kind: "VALUE";
+      valType: ValType;
+    }
+  | {
+      kind: "FUNC_TYPE";
+      funcType: FuncType;
+    };
+// TODO: We could do func type by name. Do people actually want to use existing
+// function types, or do they just want to use this type shape to define block
+// types that have noting to do with functions? I suspect the latter.

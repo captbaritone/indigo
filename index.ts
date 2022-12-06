@@ -9,7 +9,9 @@ import {
   Expression,
   GlobalType,
   Global,
+  BlockType,
 } from "./types";
+import * as Encoding from "./encoding";
 
 type FunctionDeclaration = {
   name: string;
@@ -37,16 +39,30 @@ export class ModuleContext {
   _globals: Global[] = [];
   _globalNames: { [name: string]: number } = {};
 
-  declareFunction(func: FunctionDeclaration) {
+  getFunctionTypeIndex(funcType: FuncType): number {
+    const existingFuncTypeIndex = this._funcTypes.findIndex((existing) => {
+      return funcTypesAreEqual(existing, funcType);
+    });
+    if (existingFuncTypeIndex !== -1) {
+      return existingFuncTypeIndex;
+    }
     const nextFuncTypeIndex = this._funcTypes.length;
+    this._funcTypes.push(funcType);
+    return nextFuncTypeIndex;
+  }
+
+  declareFunction(func: FunctionDeclaration) {
     const functionContext = new FunctionContext(
       this,
       func.params,
       func.results,
     );
-    this._funcTypes.push(functionContext.getFuncType());
+    const funcTypeIndex = this.getFunctionTypeIndex(
+      functionContext.getFuncType(),
+    );
+
     const nextFuncIndex = this._functions.length;
-    this._functions.push(nextFuncTypeIndex);
+    this._functions.push(funcTypeIndex);
 
     if (this._functionNames.hasOwnProperty(func.name)) {
       throw new Error(`Function name "${func.name}" already exists`);
@@ -65,13 +81,13 @@ export class ModuleContext {
     this._code.push(functionContext);
   }
 
-  defineFunction(name: string, cb: (func: FunctionContext) => void) {
+  defineFunction(name: string, cb: (func: ExpressionContext) => void) {
     const index = this._functionNames[name];
     const func = this._code[index];
     if (func == null) {
       throw new Error(`Function "${name}" does not exist`);
     }
-    cb(func);
+    cb(func._exp);
   }
 
   declareGlobal(global: Global) {
@@ -281,7 +297,6 @@ export class ModuleContext {
   }
 
   /**
-   *
    * Expressions are encoded by their instruction sequence terminated with an
    * explicit 0x0b opcode for end.
    */
@@ -354,7 +369,7 @@ export class ModuleContext {
    * Write a u32
    */
   _writeU32(value: number) {
-    this._writeBytes(...encodeU32(value));
+    Encoding.appendU32(this._bytes, value);
   }
 
   _writeByte(byte: number) {
@@ -402,7 +417,9 @@ export class ModuleContext {
     fn();
     const end = this._bytes.length;
     const diff = end - start;
-    this._bytes.splice(start, 0, ...encodeU32(diff));
+    const bytes = [];
+    Encoding.appendU32(bytes, diff);
+    this._bytes.splice(start, 0, ...bytes);
   }
 }
 
@@ -411,8 +428,8 @@ export class ModuleContext {
  */
 export class FunctionContext {
   _ctx: ModuleContext;
+  _exp: ExpressionContext;
   _locals: LocalDeclaration[] = [];
-  _bytes: number[] = [];
   _params: ValType[];
   _results: ValType[];
   // Map of locals (params and locals) to their index.
@@ -431,6 +448,40 @@ export class FunctionContext {
       const paramName = paramNames[i];
       this._variables[paramName] = i;
     }
+    this._exp = new ExpressionContext(this);
+  }
+
+  defineLocal(name: string, type: ValType) {
+    if (this._variables.hasOwnProperty(name)) {
+      throw new Error(`Variable "${name}" is already defined`);
+    }
+    this._variables[name] = Object.keys(this._variables).length;
+
+    // TODO: We could optimize this by combining locals of the same type
+    this._locals.push({ count: 1, type });
+  }
+
+  getCode(): Code {
+    return {
+      locals: this._locals,
+      expression: this._exp._bytes,
+    };
+  }
+
+  getFuncType(): FuncType {
+    return {
+      params: this._params,
+      results: this._results,
+    };
+  }
+}
+
+export class ExpressionContext {
+  _func: FunctionContext;
+  _bytes: number[];
+  constructor(func: FunctionContext) {
+    this._func = func;
+    this._bytes = [];
   }
 
   /**
@@ -471,8 +522,32 @@ export class FunctionContext {
   loop() {
     throw new Error("Unimplemented");
   }
-  if() {
-    throw new Error("Unimplemented");
+  /**
+   * Expects the test condition (i32) to be on the stack, and will conditionally
+   * evaluate the consequent block.
+   */
+  if(blockType: BlockType, consequent: (exp: ExpressionContext) => void) {
+    this._bytes.push(0x04);
+    this._writeBlockType(blockType);
+    consequent(this);
+    this._bytes.push(0x0b);
+  }
+  _writeBlockType(blockType: BlockType) {
+    switch (blockType.kind) {
+      case "EMPTY":
+        this._bytes.push(0x40);
+        break;
+      case "VALUE":
+        // TODO: Ideally this would use _writeValType
+        this._bytes.push(blockType.valType);
+        break;
+      case "FUNC_TYPE":
+        const index = this._func._ctx.getFunctionTypeIndex(blockType.funcType);
+        this._writeI32(index);
+        break;
+      default:
+        throw new Error(`Unexpected block type: ${blockType}`);
+    }
   }
   ifElse() {
     throw new Error("Unimplemented");
@@ -490,7 +565,7 @@ export class FunctionContext {
     this._bytes.push(0x0f);
   }
   call(name: string) {
-    const index = this._ctx._functionNames[name];
+    const index = this._func._ctx._functionNames[name];
     if (index === undefined) {
       throw new Error(`Function ${name} not found`);
     }
@@ -595,7 +670,7 @@ export class FunctionContext {
    */
   i32Const(n: number) {
     this._bytes.push(0x41);
-    this._bytes.push(...encodeI32(n));
+    this._writeI32(n);
   }
   i64Const(n: number) {
     this._bytes.push(0x42);
@@ -607,7 +682,7 @@ export class FunctionContext {
   }
   f64Const(n: number) {
     this._bytes.push(0x44);
-    throw new Error("Unimplemented");
+    this._writeF64(n);
   }
 
   /**
@@ -670,6 +745,57 @@ export class FunctionContext {
 
   // TODO
 
+  f64Abs() {
+    this._bytes.push(0x99);
+  }
+  f64Neg() {
+    this._bytes.push(0x9a);
+  }
+  f64Ceil() {
+    this._bytes.push(0x9b);
+  }
+  f64Floor() {
+    this._bytes.push(0x9c);
+  }
+  f64Trunc() {
+    this._bytes.push(0x9d);
+  }
+  f64Nearest() {
+    this._bytes.push(0x9e);
+  }
+  f64Sqrt() {
+    this._bytes.push(0x9f);
+  }
+  f64Add() {
+    this._bytes.push(0xa0);
+  }
+  f64Sub() {
+    this._bytes.push(0xa1);
+  }
+  f64Mul() {
+    this._bytes.push(0xa2);
+  }
+  f64Div() {
+    this._bytes.push(0xa3);
+  }
+  f64Min() {
+    this._bytes.push(0xa4);
+  }
+  f64Max() {
+    this._bytes.push(0xa5);
+  }
+  f64CopySign() {
+    this._bytes.push(0xa6);
+  }
+
+  // TODO
+
+  i32TruncF64S() {
+    this._bytes.push(0xaa);
+  }
+
+  // TODO
+
   /**
    * The saturating truncation instructions all have a one byte prefix, whereas
    * the actual opcode is encoded by a variable-length unsigned integer.
@@ -692,33 +818,9 @@ export class FunctionContext {
 
   // TODO
 
-  defineLocal(name: string, type: ValType) {
-    if (this._variables.hasOwnProperty(name)) {
-      throw new Error(`Variable "${name} is already defined`);
-    }
-    this._variables[name] = Object.keys(this._variables).length;
-
-    // TODO: We could optimize this by combining locals of the same type
-    this._locals.push({ count: 1, type });
-  }
-
-  getCode(): Code {
-    return {
-      locals: this._locals,
-      expression: this._bytes,
-    };
-  }
-
-  getFuncType(): FuncType {
-    return {
-      params: this._params,
-      results: this._results,
-    };
-  }
-
   // Writes the index of a param or local
   _writeVariableIndex(name: string) {
-    const index = this._variables[name];
+    const index = this._func._variables[name];
     if (index == null) {
       throw new Error(`Unknown variable ${name}`);
     }
@@ -726,7 +828,7 @@ export class FunctionContext {
   }
 
   _writeGlobalIndex(name: string) {
-    const index = this._ctx._globalNames[name];
+    const index = this._func._ctx._globalNames[name];
     if (index == null) {
       throw new Error(`Unknown global ${name}`);
     }
@@ -734,49 +836,33 @@ export class FunctionContext {
   }
 
   _writeU32(n: number) {
-    this._bytes.push(...encodeU32(n));
+    Encoding.appendU32(this._bytes, n);
+  }
+
+  _writeI32(n: number) {
+    Encoding.appendI32(this._bytes, n);
+  }
+
+  _writeF64(n: number) {
+    Encoding.appendF64(this._bytes, n);
   }
 }
 
-function encodeU32(n: number): number[] {
-  const buffer: number[] = [];
-  do {
-    let byte = n & 0x7f;
-    n >>>= 7;
-    if (n !== 0) {
-      byte |= 0x80;
-    }
-    buffer.push(byte);
-  } while (n !== 0);
-  return buffer;
+function funcTypesAreEqual(a: FuncType, b: FuncType) {
+  return (
+    resultTypesAreEqual(a.results, b.results) &&
+    resultTypesAreEqual(a.params, b.params)
+  );
 }
 
-function encodeI32(value: number): number[] {
-  // TODO: Guard
-  let bytes: number[] = [];
-  let byte = 0x00;
-  let size = Math.ceil(Math.log2(Math.abs(value)));
-  let negative = value < 0;
-  let more = true;
-
-  while (more) {
-    byte = value & 127;
-    value = value >> 7;
-
-    if (negative) {
-      value = value | -(1 << (size - 7));
-    }
-
-    if (
-      (value == 0 && (byte & 0x40) == 0) ||
-      (value == -1 && (byte & 0x40) == 0x40)
-    ) {
-      more = false;
-    } else {
-      byte = byte | 128;
-    }
-
-    bytes.push(byte);
+function resultTypesAreEqual(a: ResultType, b: ResultType): boolean {
+  if (a.length !== b.length) {
+    return false;
   }
-  return bytes;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) {
+      return false;
+    }
+  }
+  return true;
 }
