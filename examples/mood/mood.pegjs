@@ -9,11 +9,19 @@
 }
 
 Start
-  = Function
+  = Program
+
+Program
+  = functions:(Function __)* {
+    return {
+      type: 'Program',
+      body: extractList(functions, 0)
+    };
+  }
 
 Function 
-  = pub:PubToken? __ FnToken __ id:Identifier __ "(" params:ParameterList? ")" __ body:FunctionBody {
-    return { type: "FunctionDeclaration", id, params, body, public: !!pub };
+  = pub:PubToken? __ FnToken __ id:Identifier __ "(" params:ParameterList? ")" __ ":" __ returnType:Type __ body:FunctionBody {
+    return { type: "FunctionDeclaration", id, params, body, public: !!pub, returnType };
   }
 
 FunctionBody 
@@ -22,9 +30,16 @@ FunctionBody
   }
 
 ParameterList
-  = head:Identifier tail:(__ "," __ Identifier)* {
+  = head:Parameter tail:(__ "," __ Parameter)* {
     return buildList(head, tail, 3);
   }
+
+Parameter
+  = name:Identifier __ ":" __ annotation:Type {
+    return { type: "Parameter", name, annotation };
+  }
+
+Type = "f64";
 
 Identifier
   = name:$(IdentStart IdentCont*) {
@@ -66,5 +81,7 @@ IdentCont
 PubToken        = "pub" !IdentStart;
 FnToken         = "fn"  !IdentStart;
 
+Whitespace
+  = [ \t\r\n]+;
 __
-  = " "*
+  = Whitespace*

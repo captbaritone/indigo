@@ -3,26 +3,43 @@ import { NumType } from "../../types";
 import { AstNode } from "./ast";
 import parser from "./parser";
 
-export default class Compiler {
+export default function compile(source: string): Uint8Array {
+  const ast = parser.parse(source) as AstNode;
+  const compiler = new Compiler();
+  compiler.emit(ast);
+  return compiler.compile();
+}
+
+export class Compiler {
   ctx: ModuleContext;
   exp: ExpressionContext;
   constructor() {
     this.ctx = new ModuleContext();
   }
 
-  compile(code: string): Uint8Array {
-    const ast: AstNode = parser.parse(code);
-    this.emit(ast);
-    return new Uint8Array(this.ctx.compile());
+  compile(): Uint8Array {
+    return this.ctx.compile();
   }
 
   emit(ast: AstNode) {
     switch (ast.type) {
+      case "Program": {
+        for (const func of ast.body) {
+          this.emit(func);
+        }
+        break;
+      }
       case "FunctionDeclaration": {
         const name = ast.id.name;
         const params = {};
         for (const param of ast.params) {
-          params[param.name] = NumType.F64;
+          switch (param.annotation) {
+            case "f64":
+              params[param.name.name] = NumType.F64;
+              break;
+            default:
+              throw new Error(`Unknown type ${param.annotation}`);
+          }
         }
         this.ctx.declareFunction({
           name,
