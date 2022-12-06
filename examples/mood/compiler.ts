@@ -1,57 +1,19 @@
-import peg from "pegjs";
-import fs from "fs";
-import { ExpressionContext, ModuleContext } from "..";
-import { NumType } from "../types";
-const GRAMMAR = fs.readFileSync("./examples/mood.pegjs", "utf-8");
+import { ExpressionContext, ModuleContext } from "../..";
+import { NumType } from "../../types";
+import { AstNode } from "./ast";
+import parser from "./parser";
 
-const parser = peg.generate(GRAMMAR);
-
-type AstNode = FunctionDeclaration | Expression;
-type Expression = Identifier | Literal | IfStatement | BinaryExpression;
-
-type FunctionDeclaration = {
-  type: "FunctionDeclaration";
-  id: Identifier;
-  params: Identifier[];
-  public: boolean;
-  body: Expression;
-};
-
-type Identifier = {
-  type: "Identifier";
-  name: string;
-};
-
-type Literal = {
-  type: "Literal";
-  value: number | string;
-};
-
-type BinaryExpression = {
-  type: "BinaryExpression";
-  left: Expression;
-  right: Expression;
-  operator: "+" | "*";
-};
-
-type IfStatement = {
-  type: "IfStatement";
-  test: Expression;
-  consequent: Expression;
-  alternate: Expression | null;
-};
-
-class Compiler {
+export default class Compiler {
   ctx: ModuleContext;
   exp: ExpressionContext;
   constructor() {
     this.ctx = new ModuleContext();
   }
 
-  compile(code: string) {
+  compile(code: string): Uint8Array {
     const ast: AstNode = parser.parse(code);
     this.emit(ast);
-    return this.ctx.compile();
+    return new Uint8Array(this.ctx.compile());
   }
 
   emit(ast: AstNode) {
@@ -116,11 +78,3 @@ class Compiler {
     }
   }
 }
-
-const compile = new Compiler();
-const code = `pub fn add(a, b) { a + b }`;
-const binary = new Uint8Array(compile.compile(code));
-
-const instance = new WebAssembly.Instance(new WebAssembly.Module(binary), {});
-// @ts-ignore
-console.log(instance.exports.add(1, 2));

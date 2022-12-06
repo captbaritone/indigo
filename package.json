@@ -14,7 +14,8 @@
   "scripts": {
     "start": "node -r @swc-node/register index.ts",
     "test": "node -r @swc-node/register test.ts",
-    "example": "node -r @swc-node/register examples/compiler.ts"
+    "example": "node -r @swc-node/register examples/compiler.ts",
+    "mood": "node -r @swc-node/register examples/mood/mood.ts"
   },
   "dependencies": {
     "typescript": "^4.9.3"
