@@ -11,10 +11,7 @@ export default function compile(source: string): Result<Uint8Array> {
 
 function compileImpl(source: string): Uint8Array {
   const ast = parser.parse(source) as AstNode;
-  const errors = typeCheck(ast);
-  if (errors.length) {
-    console.warn(errors);
-  }
+  typeCheck(ast); // throws DiagnosticError if type errors are detected
   const compiler = new Compiler();
   compiler.emit(ast);
   return compiler.compile();

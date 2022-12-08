@@ -1,13 +1,14 @@
-import { AstNode } from "./ast";
-import DiagnosticError, {
-  annotate,
-  AnnotatedLocation,
-} from "./DiagnosticError";
+import { AstNode, TypeAnnotation } from "./ast";
+import DiagnosticError, { annotate } from "./DiagnosticError";
 
-export function typeCheck(ast: AstNode) {
+/**
+ * Type-checks the given AST and throws DiagnosticError if type errors are
+ * detected.
+ */
+export function typeCheck(ast: AstNode): void {
   const checker = new TypeChecker();
+  const scope = new Scope();
   checker.tc(ast, new Scope());
-  return [];
 }
 
 type Type_ =
@@ -131,7 +132,7 @@ class TypeChecker {
       }
       case "Literal": {
         // TODO: For now all literals are f64, but we should support i32 literals and eventually strings.
-        if (typeof node.value !== "number") {
+        if (typeof node.value === "number") {
           return { type: "f64" };
         } else {
           throw new Error("Non-number literals are not yet supported.");
@@ -164,7 +165,7 @@ class TypeChecker {
     return type;
   }
 
-  fromAnnotation(annotation: string): Type_ {
+  fromAnnotation(annotation: TypeAnnotation): Type_ {
     switch (annotation) {
       case "f64":
         return { type: "f64" };

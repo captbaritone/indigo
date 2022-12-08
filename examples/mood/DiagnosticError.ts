@@ -51,6 +51,11 @@ export default class DiagnosticError extends Error {
 
   // Prints a diagnostic message with code frame to the console.
   reportDiagnostic(source: string) {
+    console.error(this.asCodeFrame(source, "<dummy file name>"));
+  }
+
+  // Formats the diagnostic message with code frame.
+  asCodeFrame(source: string, filePath: string): string {
     const lines = source.split("\n");
     const location = this.loc.loc;
     const startLine = Math.max(location.start.line - 2, 0);
@@ -63,7 +68,7 @@ export default class DiagnosticError extends Error {
     const gutter = String(endLine).length;
     const defaultGutter = " ".repeat(gutter) + " | ";
 
-    const fileLocation = `<dummy file name>:${location.start.line}:${location.start.column}`;
+    const fileLocation = `${filePath}:${location.start.line}:${location.start.column}`;
 
     const codeFrameLines: string[] = [
       `Error: ${this.message}:`,
@@ -97,7 +102,6 @@ export default class DiagnosticError extends Error {
 
     codeFrameLines.push("");
 
-    const codeFrame = codeFrameLines.join("\n");
-    console.error(codeFrame);
+    return codeFrameLines.join("\n");
   }
 }

@@ -37,7 +37,7 @@ type Parameter = {
 };
 
 type NumericType = "f64" | "i32";
-type TypeAnnotation = NumericType;
+export type TypeAnnotation = NumericType;
 
 type Identifier = {
   type: "Identifier";

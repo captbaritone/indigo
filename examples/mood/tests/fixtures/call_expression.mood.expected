@@ -1,0 +1,7 @@
+Error: Expected i32, got f64:
+ --> call_expression.mood:6:3
+
+  | fn double(a: f64): i32 {
+6 |   add(a, a)
+  |   ^^^^^^^^^ This expression has the wrong type.
+  | }

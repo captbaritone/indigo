@@ -1,20 +1,31 @@
 import compile from "../compiler";
 import fs from "fs";
 import path from "path";
+import { diff } from "jest-diff";
 
 const fixturesDir = path.join(__dirname, "fixtures");
 
-const testFixtures = fs.readdirSync(fixturesDir);
+const testFixtures = fs
+  .readdirSync(fixturesDir)
+  .filter((file) => file.endsWith(".mood"));
+
+let failureCount = 0;
 
 for (const fixture of testFixtures) {
+  const expectedFilePath = path.join(fixturesDir, fixture + ".expected");
   const fixtureContent = fs.readFileSync(
     path.join(fixturesDir, fixture),
     "utf-8",
   );
-  console.log(fixtureContent);
+  if (!fs.existsSync(expectedFilePath)) {
+    fs.writeFileSync(expectedFilePath, "", "utf-8");
+  }
+  const expectedContent = fs.readFileSync(expectedFilePath, "utf-8");
+
   const binary = compile(fixtureContent);
+  let actual: string;
   if (binary.type === "error") {
-    console.error(binary.value.reportDiagnostic(fixtureContent));
+    actual = binary.value.asCodeFrame(fixtureContent, fixture);
   } else {
     const instance = new WebAssembly.Instance(
       new WebAssembly.Module(binary.value),
@@ -25,6 +36,29 @@ for (const fixture of testFixtures) {
       throw new Error("Expected test function to be exported");
     }
     // @ts-ignore
-    console.log(instance.exports.test());
+    actual = String(instance.exports.test());
   }
+
+  if (actual !== expectedContent) {
+    if (process.env.WRITE_FIXTURES) {
+      console.error("UPDATED: " + fixture);
+      fs.writeFileSync(expectedFilePath, actual, "utf-8");
+    } else {
+      failureCount++;
+      console.error("FAILURE: " + fixture);
+      console.log(diff(expectedContent, actual));
+    }
+  } else {
+    console.log("OK: " + fixture);
+  }
+}
+console.log("");
+
+if (failureCount > 0) {
+  console.log(
+    `${failureCount} failures found. Run with WRITE_FIXTURES=1 to update fixtures`,
+  );
+  process.exit(1);
+} else {
+  console.log("All tests passed!");
 }
