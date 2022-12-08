@@ -151,6 +151,9 @@ class TypeChecker {
         annotate(node.loc, "This expression has the wrong type."),
       );
     }
+    if (actual.type === "function") {
+      throw new Error("TODO: Check function types");
+    }
     return actual;
   }
 
