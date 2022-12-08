@@ -5,22 +5,33 @@ import { diff } from "jest-diff";
 
 const fixturesDir = path.join(__dirname, "fixtures");
 
-const testFixtures = fs
-  .readdirSync(fixturesDir)
-  .filter((file) => file.endsWith(".mood"));
+const testFixtures: string[] = [];
+const otherFiles: Set<string> = new Set();
+
+for (const fileName of fs.readdirSync(fixturesDir)) {
+  if (fileName.endsWith(".mood")) {
+    testFixtures.push(fileName);
+  } else {
+    otherFiles.add(fileName);
+  }
+}
 
 let failureCount = 0;
 
 for (const fixture of testFixtures) {
-  const expectedFilePath = path.join(fixturesDir, fixture + ".expected");
+  const expectedFileName = fixture + ".expected";
+  const expectedFilePath = path.join(fixturesDir, expectedFileName);
+  if (otherFiles.has(expectedFileName)) {
+    otherFiles.delete(expectedFileName);
+  } else {
+    fs.writeFileSync(expectedFilePath, "", "utf-8");
+  }
+  const expectedContent = fs.readFileSync(expectedFilePath, "utf-8");
+
   const fixtureContent = fs.readFileSync(
     path.join(fixturesDir, fixture),
     "utf-8",
   );
-  if (!fs.existsSync(expectedFilePath)) {
-    fs.writeFileSync(expectedFilePath, "", "utf-8");
-  }
-  const expectedContent = fs.readFileSync(expectedFilePath, "utf-8");
 
   const binary = compile(fixtureContent);
   let actual: string;
@@ -61,4 +72,20 @@ if (failureCount > 0) {
   process.exit(1);
 } else {
   console.log("All tests passed!");
+}
+
+if (otherFiles.size > 0) {
+  if (process.env.WRITE_FIXTURES) {
+    for (const fileName of otherFiles) {
+      console.log("DELETED: " + fileName);
+      fs.unlinkSync(path.join(fixturesDir, fileName));
+    }
+  } else {
+    console.log("Unexpected files found:");
+    for (const fileName of otherFiles) {
+      console.log(" - " + fileName);
+    }
+    console.log("Run with WRITE_FIXTURES=1 to deleted unexpected files");
+    process.exit(1);
+  }
 }
