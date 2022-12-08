@@ -19,6 +19,21 @@ Program
     };
   }
 
+CallExpression
+  = callee:Identifier __ "(" __ args:ArgumentList __ ")" {
+    return {
+      type: 'CallExpression',
+      callee: callee,
+      args,
+      loc: location()
+    }
+  }
+
+ArgumentList
+  = head:Expression tail:(__ "," __ Expression)* {
+    return buildList(head, tail, 3);
+  }
+
 Function 
   = pub:PubToken? __ FnToken __ id:Identifier __ "(" params:ParameterList? ")" __ ":" __ returnType:Type __ body:FunctionBody {
     return { type: "FunctionDeclaration", id, params, body, public: !!pub, returnType };
@@ -39,7 +54,8 @@ Parameter
     return { type: "Parameter", name, annotation };
   }
 
-Type = "f64";
+NumericType = "f64" / "i32";
+Type = NumericType;
 
 Identifier
   = name:$(IdentStart IdentCont*) {
@@ -47,7 +63,8 @@ Identifier
   }
 
 Expression
- = Additive
+  = CallExpression
+  / Additive
 
 Additive
   = left:Multiplicative __ operator:"+" __ right:Additive {
@@ -68,7 +85,7 @@ Primary
 
 Integer "integer"
   = digits:[0-9]+ {
-    return { type: "Literal", value: parseInt(digits.join(""), 10) };
+    return { type: "Literal", value: parseInt(digits.join(""), 10), annotation: "f64" };
   }
 
 IdentStart

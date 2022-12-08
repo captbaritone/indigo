@@ -2,9 +2,27 @@ import { ExpressionContext, ModuleContext } from "../..";
 import { NumType } from "../../types";
 import { AstNode } from "./ast";
 import parser from "./parser";
+import { typeCheck } from "./typechecker";
+import DiagnosticError from "./DiagnosticError";
 
-export default function compile(source: string): Uint8Array {
+export default function compile(source: string): Uint8Array | null {
+  try {
+    return compileImpl(source);
+  } catch (e) {
+    if (e instanceof DiagnosticError) {
+      e.reportDiagnostic(source);
+      return null;
+    }
+    throw e;
+  }
+}
+
+function compileImpl(source: string): Uint8Array {
   const ast = parser.parse(source) as AstNode;
+  const errors = typeCheck(ast);
+  if (errors.length) {
+    console.warn(errors);
+  }
   const compiler = new Compiler();
   compiler.emit(ast);
   return compiler.compile();
@@ -66,6 +84,13 @@ export class Compiler {
           default:
             throw new Error(`Unknown operator: ${ast.operator}`);
         }
+        break;
+      }
+      case "CallExpression": {
+        for (const arg of ast.args) {
+          this.emit(arg);
+        }
+        this.exp.call(ast.callee.name);
         break;
       }
       case "Identifier": {

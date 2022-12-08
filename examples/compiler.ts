@@ -1,6 +1,6 @@
 import peg from "pegjs";
 import fs from "fs";
-import { ExpressionContext, FunctionContext, ModuleContext } from "..";
+import { ExpressionContext, ModuleContext } from "..";
 import { NumType } from "../types";
 
 const GRAMMAR = fs.readFileSync("./examples/javascript.pegjs", "utf-8");
