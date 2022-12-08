@@ -6,9 +6,13 @@ const code = fs.readFileSync(
   "utf-8",
 );
 const binary = compile(code);
-
-if (binary !== null) {
-  const instance = new WebAssembly.Instance(new WebAssembly.Module(binary), {});
+if (binary.type === "error") {
+  console.error(binary.value);
+} else {
+  const instance = new WebAssembly.Instance(
+    new WebAssembly.Module(binary.value),
+    {},
+  );
   // @ts-ignore
   console.log(instance.exports.double(5));
 }

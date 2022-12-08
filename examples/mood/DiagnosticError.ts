@@ -1,5 +1,27 @@
 import { Location } from "./ast";
 
+export type Result<T> =
+  | {
+      type: "ok";
+      value: T;
+    }
+  | {
+      type: "error";
+      value: DiagnosticError;
+    };
+
+export function catchToResult<T>(fn: () => T): Result<T> {
+  try {
+    const value = fn();
+    return { type: "ok", value };
+  } catch (e) {
+    if (e instanceof DiagnosticError) {
+      return { type: "error", value: e };
+    }
+    throw e;
+  }
+}
+
 export class AnnotatedLocation {
   loc: Location;
   annotation: string;

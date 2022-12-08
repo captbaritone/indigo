@@ -3,18 +3,10 @@ import { NumType } from "../../types";
 import { AstNode } from "./ast";
 import parser from "./parser";
 import { typeCheck } from "./typechecker";
-import DiagnosticError from "./DiagnosticError";
+import { Result, catchToResult } from "./DiagnosticError";
 
-export default function compile(source: string): Uint8Array | null {
-  try {
-    return compileImpl(source);
-  } catch (e) {
-    if (e instanceof DiagnosticError) {
-      e.reportDiagnostic(source);
-      return null;
-    }
-    throw e;
-  }
+export default function compile(source: string): Result<Uint8Array> {
+  return catchToResult(() => compileImpl(source));
 }
 
 function compileImpl(source: string): Uint8Array {

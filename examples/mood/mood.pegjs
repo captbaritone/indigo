@@ -35,7 +35,7 @@ ArgumentList
   }
 
 Function 
-  = pub:PubToken? __ FnToken __ id:Identifier __ "(" params:ParameterList? ")" __ ":" __ returnType:Type __ body:FunctionBody {
+  = pub:PubToken? __ FnToken __ id:Identifier __ "(" params:ParameterList ")" __ ":" __ returnType:Type __ body:FunctionBody {
     return { type: "FunctionDeclaration", id, params, body, public: !!pub, returnType };
   }
 
@@ -47,6 +47,9 @@ FunctionBody
 ParameterList
   = head:Parameter tail:(__ "," __ Parameter)* {
     return buildList(head, tail, 3);
+  }
+  / __ {
+    return [];
   }
 
 Parameter

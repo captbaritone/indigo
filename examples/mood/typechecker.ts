@@ -1,5 +1,8 @@
 import { AstNode } from "./ast";
-import DiagnosticError, { annotate } from "./DiagnosticError";
+import DiagnosticError, {
+  annotate,
+  AnnotatedLocation,
+} from "./DiagnosticError";
 
 export function typeCheck(ast: AstNode) {
   const checker = new TypeChecker();
@@ -125,6 +128,14 @@ class TypeChecker {
           this.expectType(arg, func.params[i], scope);
         }
         return func.result;
+      }
+      case "Literal": {
+        // TODO: For now all literals are f64, but we should support i32 literals and eventually strings.
+        if (typeof node.value !== "number") {
+          return { type: "f64" };
+        } else {
+          throw new Error("Non-number literals are not yet supported.");
+        }
       }
       default:
         throw new Error(`Unknown node type: ${node.type}`);
