@@ -7,5 +7,5 @@ pub fn mul(a: f64, b: f64): f64 {
 }
 
 pub fn test(): f64 {
-  mul(2, 5)
+  mul(2.0_f64, 5.0_f64)
 }

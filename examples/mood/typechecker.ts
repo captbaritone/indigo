@@ -57,6 +57,10 @@ class Scope {
 
 class TypeChecker {
   tc(node: AstNode, scope: Scope): Type_ {
+    // Invariant. Can be removed once parser stabilizes.
+    if (node.loc == null) {
+      throw new Error(`AstNode with type "${node.type}" has no location.`);
+    }
     switch (node.type) {
       case "Program": {
         let lastType: Type_ = { type: "empty" };
@@ -131,12 +135,7 @@ class TypeChecker {
         return func.result;
       }
       case "Literal": {
-        // TODO: For now all literals are f64, but we should support i32 literals and eventually strings.
-        if (typeof node.value === "number") {
-          return { type: "f64" };
-        } else {
-          throw new Error("Non-number literals are not yet supported.");
-        }
+        return this.fromAnnotation(node.annotation);
       }
       default:
         throw new Error(`Unknown node type: ${node.type}`);
@@ -146,6 +145,10 @@ class TypeChecker {
   expectType(node: AstNode, type: Type_, scope: Scope): Type_ {
     const actual = this.tc(node, scope);
     if (actual.type !== type.type) {
+      if (node.loc == null) {
+        console.log(node);
+        throw new Error("Node has no location");
+      }
       throw new DiagnosticError(
         `Expected ${type.type}, got ${actual.type}`,
         annotate(node.loc, "This expression has the wrong type."),

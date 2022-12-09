@@ -15,7 +15,8 @@ Program
   = functions:(Function __)* {
     return {
       type: 'Program',
-      body: extractList(functions, 0)
+      body: extractList(functions, 0),
+      loc: location()
     };
   }
 
@@ -36,7 +37,7 @@ ArgumentList
 
 Function 
   = pub:PubToken? __ FnToken __ id:Identifier __ "(" params:ParameterList ")" __ ":" __ returnType:Type __ body:FunctionBody {
-    return { type: "FunctionDeclaration", id, params, body, public: !!pub, returnType };
+    return { type: "FunctionDeclaration", id, params, body, public: !!pub, returnType, loc: location() };
   }
 
 FunctionBody 
@@ -54,7 +55,7 @@ ParameterList
 
 Parameter
   = name:Identifier __ ":" __ annotation:Type {
-    return { type: "Parameter", name, annotation };
+    return { type: "Parameter", name, annotation, loc: location() };
   }
 
 NumericType = "f64" / "i32";
@@ -62,7 +63,7 @@ Type = NumericType;
 
 Identifier
   = name:$(IdentStart IdentCont*) {
-    return { type: "Identifier", name }
+    return { type: "Identifier", name, loc: location() }
   }
 
 Expression
@@ -71,25 +72,34 @@ Expression
 
 Additive
   = left:Multiplicative __ operator:"+" __ right:Additive {
-    return { type: "BinaryExpression", left, right, operator };
+    return { type: "BinaryExpression", left, right, operator, loc: location() };
   }
   / Multiplicative
 
 Multiplicative
   = left:Primary __ operator:"*" __ right:Multiplicative { 
-    return { type: "BinaryExpression", left, right, operator };
+    return { type: "BinaryExpression", left, right, operator, loc: location() };
   }
   / Primary
 
 Primary
-  = Integer
+  = Number
   / Identifier
   / "(" __ additive:Additive __ ")" { return additive; }
 
-Integer "integer"
-  = digits:[0-9]+ {
-    return { type: "Literal", value: parseInt(digits.join(""), 10), annotation: "f64" };
+F64
+  = digits:[0-9]+ "." decimal:[0-9]+ "_f64" {
+    return { type: "Literal", value: parseFloat(digits.join("") + "." + decimal.join("")), annotation: "f64", loc: location() };
   }
+
+I32
+  = digits:([0-9]+) "_i32" {
+    return { type: "Literal", value: parseInt(digits.join(""), 10), annotation: "i32", loc: location() };
+  }
+
+Number "number"
+  = F64
+  / I32
 
 IdentStart
   = [a-zA-Z]

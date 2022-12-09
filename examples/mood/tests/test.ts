@@ -33,22 +33,7 @@ for (const fixture of testFixtures) {
     "utf-8",
   );
 
-  const binary = compile(fixtureContent);
-  let actual: string;
-  if (binary.type === "error") {
-    actual = binary.value.asCodeFrame(fixtureContent, fixture);
-  } else {
-    const instance = new WebAssembly.Instance(
-      new WebAssembly.Module(binary.value),
-      {},
-    );
-
-    if (typeof instance.exports.test !== "function") {
-      throw new Error("Expected test function to be exported");
-    }
-    // @ts-ignore
-    actual = String(instance.exports.test());
-  }
+  const actual = evaluate(fixtureContent, fixture);
 
   if (actual !== expectedContent) {
     if (process.env.WRITE_FIXTURES) {
@@ -87,5 +72,27 @@ if (otherFiles.size > 0) {
     }
     console.log("Run with WRITE_FIXTURES=1 to deleted unexpected files");
     process.exit(1);
+  }
+}
+
+function evaluate(code: string, fileName: string): string {
+  try {
+    const binary = compile(code);
+    if (binary.type === "error") {
+      return binary.value.asCodeFrame(code, fileName);
+    } else {
+      const instance = new WebAssembly.Instance(
+        new WebAssembly.Module(binary.value),
+        {},
+      );
+
+      if (typeof instance.exports.test !== "function") {
+        throw new Error("Expected test function to be exported");
+      }
+      // @ts-ignore
+      return String(instance.exports.test());
+    }
+  } catch (e) {
+    return e.stack;
   }
 }
