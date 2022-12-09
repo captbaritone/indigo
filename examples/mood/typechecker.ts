@@ -142,6 +142,12 @@ class TypeChecker {
       case "Literal": {
         return this.fromAnnotation(node.annotation, scope);
       }
+      case "VariableDeclaration": {
+        const type = this.fromAnnotation(node.annotation, scope);
+        this.expectType(node.value, type, scope);
+        scope.define(node.name.name, type);
+        return type;
+      }
       default:
         throw new Error(`Unknown node type: ${node.type}`);
     }

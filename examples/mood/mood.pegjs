@@ -103,8 +103,14 @@ Identifier
     return { type: "Identifier", name, loc: location() }
   }
 
+VariableDeclaration
+  = "let" __ name:Identifier ":" __ annotation:Type __ "=" __ value:Expression {
+    return { type: "VariableDeclaration", name, value, annotation, loc: location() };
+  }
+
 Expression
-  = CallExpression
+  = VariableDeclaration
+  / CallExpression
   / ExpressionPath
   / Additive
 

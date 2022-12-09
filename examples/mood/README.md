@@ -13,6 +13,13 @@ Keeping track of the many many things still needed to be done:
 - Arrays
     - More generally, we need to figure out how to model heap allocated data
 - Structs
+- Define a canonical ordering for AST nodes for use in:
+    - Grammar
+    - AstNode types
+    - TypeChecker
+    - Compiler
+- Optimize statements (`exp;`) to not push a value on the stack.
+
 
 ## TODO Projects
 

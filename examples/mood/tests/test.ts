@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { diff } from "jest-diff";
 
+const WRITE_FIXTURES = process.argv.some((arg) => arg === "--write");
 const fixturesDir = path.join(__dirname, "fixtures");
 
 const testFixtures: string[] = [];
@@ -36,7 +37,7 @@ for (const fixture of testFixtures) {
   const actual = evaluate(fixtureContent, fixture);
 
   if (actual !== expectedContent) {
-    if (process.env.WRITE_FIXTURES) {
+    if (WRITE_FIXTURES) {
       console.error("UPDATED: " + fixture);
       fs.writeFileSync(expectedFilePath, actual, "utf-8");
     } else {
@@ -52,7 +53,7 @@ console.log("");
 
 if (failureCount > 0) {
   console.log(
-    `${failureCount} failures found. Run with WRITE_FIXTURES=1 to update fixtures`,
+    `${failureCount} failures found. Run with --write to update fixtures`,
   );
   process.exit(1);
 } else {
@@ -60,7 +61,7 @@ if (failureCount > 0) {
 }
 
 if (otherFiles.size > 0) {
-  if (process.env.WRITE_FIXTURES) {
+  if (WRITE_FIXTURES) {
     for (const fileName of otherFiles) {
       console.log("DELETED: " + fileName);
       fs.unlinkSync(path.join(fixturesDir, fileName));
@@ -70,7 +71,7 @@ if (otherFiles.size > 0) {
     for (const fileName of otherFiles) {
       console.log(" - " + fileName);
     }
-    console.log("Run with WRITE_FIXTURES=1 to deleted unexpected files");
+    console.log("Run with --write to deleted unexpected files");
     process.exit(1);
   }
 }

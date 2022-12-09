@@ -6,7 +6,8 @@ type Expression =
   | BinaryExpression
   | CallExpression
   | ExpressionPath
-  | BlockExpression;
+  | BlockExpression
+  | VariableDeclaration;
 
 type Position = { offset: number; line: number; column: number };
 
@@ -62,6 +63,14 @@ type Parameter = {
 type NumericType = {
   type: "PrimitiveType";
   name: "f64" | "i32";
+};
+
+type VariableDeclaration = {
+  type: "VariableDeclaration";
+  name: Identifier;
+  value: Expression;
+  annotation: TypeAnnotation;
+  loc: Location;
 };
 
 export type TypeAnnotation = NumericType | Identifier;

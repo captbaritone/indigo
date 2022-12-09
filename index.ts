@@ -836,6 +836,10 @@ export class ExpressionContext {
 
   // TODO
 
+  defineLocal(name: string, type: ValType) {
+    this._func.defineLocal(name, type);
+  }
+
   // Writes the index of a param or local
   _writeVariableIndex(name: string) {
     const index = this._func._variables[name];

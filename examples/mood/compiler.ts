@@ -114,6 +114,13 @@ export class Compiler {
         this.exp.i32Const(variantIndex);
         break;
       }
+      case "VariableDeclaration": {
+        const type = typeFromAnnotation(ast.annotation);
+        this.exp.defineLocal(ast.name.name, type);
+        this.emit(ast.value, scope);
+        this.exp.localTee(ast.name.name);
+        break;
+      }
       case "Identifier": {
         this.exp.localGet(ast.name);
         break;
