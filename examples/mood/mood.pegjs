@@ -34,6 +34,17 @@ CallExpression
     }
   }
 
+ExpressionPath
+  // For now we only accept a depth of one
+  = head:Identifier __ "::" __ tail:Identifier {
+    return {
+      type: 'ExpressionPath',
+      head,
+      tail,
+      loc: location()
+    };
+  }
+
 ArgumentList
   = head:Expression tail:(__ "," __ Expression)* {
     return buildList(head, tail, 3);
@@ -78,7 +89,9 @@ Parameter
   }
 
 NumericType = "f64" / "i32";
-Type = NumericType;
+Type
+  = name:NumericType { return { type: "PrimitiveType", name, loc: location() }; } 
+  / Identifier;
 
 Identifier
   = name:$(IdentStart IdentCont*) {
@@ -87,6 +100,7 @@ Identifier
 
 Expression
   = CallExpression
+  / ExpressionPath
   / Additive
 
 Additive
@@ -108,12 +122,12 @@ Primary
 
 F64
   = digits:[0-9]+ "." decimal:[0-9]+ "_f64" {
-    return { type: "Literal", value: parseFloat(digits.join("") + "." + decimal.join("")), annotation: "f64", loc: location() };
+    return { type: "Literal", value: parseFloat(digits.join("") + "." + decimal.join("")), annotation: {type: "PrimitiveType", name: "f64", loc: location()}, loc: location() };
   }
 
 I32
   = digits:([0-9]+) "_i32" {
-    return { type: "Literal", value: parseInt(digits.join(""), 10), annotation: "i32", loc: location() };
+    return { type: "Literal", value: parseInt(digits.join(""), 10), annotation:  {type: "PrimitiveType", name: "i32", loc: location()}, loc: location() };
   }
 
 Number "number"

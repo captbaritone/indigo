@@ -4,7 +4,8 @@ type Expression =
   | Literal
   | IfStatement
   | BinaryExpression
-  | CallExpression;
+  | CallExpression
+  | ExpressionPath;
 
 type Position = { offset: number; line: number; column: number };
 
@@ -51,8 +52,12 @@ type Parameter = {
   loc: Location;
 };
 
-type NumericType = "f64" | "i32";
-export type TypeAnnotation = NumericType;
+type NumericType = {
+  type: "PrimitiveType";
+  name: "f64" | "i32";
+};
+
+export type TypeAnnotation = NumericType | Identifier;
 
 type Identifier = {
   type: "Identifier";
@@ -71,6 +76,13 @@ type CallExpression = {
   type: "CallExpression";
   callee: Identifier;
   args: Expression[];
+  loc: Location;
+};
+
+type ExpressionPath = {
+  type: "ExpressionPath";
+  head: Identifier;
+  tail: Identifier;
   loc: Location;
 };
 

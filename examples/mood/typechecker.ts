@@ -1,73 +1,27 @@
 import { AstNode, TypeAnnotation } from "./ast";
 import DiagnosticError, { annotate } from "./DiagnosticError";
+import SymbolTable, { SymbolType } from "./SymbolTable";
 
 /**
  * Type-checks the given AST and throws DiagnosticError if type errors are
  * detected.
  */
-export function typeCheck(ast: AstNode): void {
+export function typeCheck(ast: AstNode): SymbolTable {
   const checker = new TypeChecker();
-  const scope = new Scope();
-  checker.tc(ast, new Scope());
-}
-
-type Type_ =
-  | {
-      type: "f64";
-    }
-  | {
-      type: "i32";
-    }
-  | {
-      type: "empty";
-    }
-  | {
-      type: "function";
-      params: Type_[];
-      result: Type_;
-    }
-  | {
-      type: "enum";
-      variants: { name: string; valueType: Type_ | null }[];
-    };
-
-class Scope {
-  _variables: Map<string, Type_> = new Map();
-  _parent: Scope | null = null;
-
-  constructor(parent: Scope | null = null) {
-    this._parent = parent;
-  }
-
-  define(name: string, type: Type_) {
-    this._variables.set(name, type);
-  }
-
-  lookup(name: string): Type_ | null {
-    const found = this._variables.get(name);
-    if (found != null) {
-      return found;
-    }
-    if (this._parent != null) {
-      return this._parent.lookup(name);
-    }
-    return null;
-  }
-
-  child(): Scope {
-    return new Scope(this);
-  }
+  const scope = new SymbolTable();
+  checker.tc(ast, scope);
+  return scope;
 }
 
 class TypeChecker {
-  tc(node: AstNode, scope: Scope): Type_ {
+  tc(node: AstNode, scope: SymbolTable): SymbolType {
     // Invariant. Can be removed once parser stabilizes.
     if (node.loc == null) {
       throw new Error(`AstNode with type "${node.type}" has no location.`);
     }
     switch (node.type) {
       case "Program": {
-        let lastType: Type_ = { type: "empty" };
+        let lastType: SymbolType = { type: "empty" };
         for (const child of node.body) {
           lastType = this.tc(child, scope);
         }
@@ -79,18 +33,19 @@ class TypeChecker {
       }
       case "FunctionDeclaration": {
         const functionScope = scope.child();
-        const params: Type_[] = [];
+        const params: SymbolType[] = [];
         for (const param of node.params) {
-          const paramType = this.fromAnnotation(param.annotation);
+          const paramType = this.fromAnnotation(param.annotation, scope);
           params.push(paramType);
           functionScope.define(param.name.name, paramType);
         }
-        const result = this.fromAnnotation(node.returnType);
+        const result = this.fromAnnotation(node.returnType, scope);
 
         scope.define(node.id.name, {
           type: "function",
           params,
           result,
+          scope: functionScope,
         });
 
         this.expectType(node.body, result, functionScope);
@@ -152,15 +107,40 @@ class TypeChecker {
         }
         return func.result;
       }
+      case "ExpressionPath": {
+        const type = scope.lookup(node.head.name);
+        if (type == null) {
+          throw new DiagnosticError(
+            "Undefined variable: " + node.head.name,
+            annotate(node.head.loc, "This variable is not defined."),
+          );
+        }
+
+        if (type.type !== "enum") {
+          throw new DiagnosticError(
+            "Expected enum, got " + type.type,
+            annotate(node.head.loc, "This is not an enum."),
+          );
+        }
+
+        const variant = type.variants.find((v) => v.name === node.tail.name);
+        if (variant == null) {
+          throw new DiagnosticError(
+            "Undefined variant: " + node.tail.name,
+            annotate(node.tail.loc, "This variant is not defined."),
+          );
+        }
+        return type;
+      }
       case "Literal": {
-        return this.fromAnnotation(node.annotation);
+        return this.fromAnnotation(node.annotation, scope);
       }
       default:
         throw new Error(`Unknown node type: ${node.type}`);
     }
   }
 
-  expectType(node: AstNode, type: Type_, scope: Scope): Type_ {
+  expectType(node: AstNode, type: SymbolType, scope: SymbolTable): SymbolType {
     const actual = this.tc(node, scope);
     if (actual.type !== type.type) {
       if (node.loc == null) {
@@ -178,7 +158,7 @@ class TypeChecker {
     return actual;
   }
 
-  expectNumeric(node: AstNode, scope: Scope): Type_ {
+  expectNumeric(node: AstNode, scope: SymbolTable): SymbolType {
     const type = this.tc(node, scope);
     if (!(type.type === "f64" || type.type === "i32")) {
       throw new DiagnosticError(
@@ -189,14 +169,29 @@ class TypeChecker {
     return type;
   }
 
-  fromAnnotation(annotation: TypeAnnotation): Type_ {
-    switch (annotation) {
-      case "f64":
-        return { type: "f64" };
-      case "i32":
-        return { type: "i32" };
+  fromAnnotation(annotation: TypeAnnotation, scope: SymbolTable): SymbolType {
+    switch (annotation.type) {
+      case "PrimitiveType":
+        switch (annotation.name) {
+          case "f64":
+            return { type: "f64" };
+          case "i32":
+            return { type: "i32" };
+          default:
+            throw new Error(`Unknown type ${annotation}`);
+        }
+      case "Identifier":
+        const found = scope.lookup(annotation.name);
+        if (found == null) {
+          throw new DiagnosticError(
+            "Unknown type: " + annotation.name,
+            annotate(annotation.loc, "This type is not defined."),
+          );
+        }
+        return found;
       default:
-        throw new Error(`Unknown type ${annotation}`);
+        // @ts-ignore
+        throw new Error(`Unknown TypeAnnotation ${annotation.type}`);
     }
   }
 }

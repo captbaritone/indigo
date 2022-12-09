@@ -1,9 +1,14 @@
 import { ExpressionContext, ModuleContext } from "../..";
 import { NumType } from "../../types";
-import { AstNode } from "./ast";
+import { AstNode, TypeAnnotation } from "./ast";
 import parser from "./parser";
 import { typeCheck } from "./typechecker";
-import { Result, catchToResult } from "./DiagnosticError";
+import DiagnosticError, {
+  Result,
+  catchToResult,
+  annotate,
+} from "./DiagnosticError";
+import SymbolTable from "./SymbolTable";
 
 export default function compile(source: string): Result<Uint8Array> {
   return catchToResult(() => compileImpl(source));
@@ -11,9 +16,9 @@ export default function compile(source: string): Result<Uint8Array> {
 
 function compileImpl(source: string): Uint8Array {
   const ast = parser.parse(source) as AstNode;
-  typeCheck(ast); // throws DiagnosticError if type errors are detected
+  const scope = typeCheck(ast); // throws DiagnosticError if type errors are detected
   const compiler = new Compiler();
-  compiler.emit(ast);
+  compiler.emit(ast, scope);
   return compiler.compile();
 }
 
@@ -28,11 +33,11 @@ export class Compiler {
     return this.ctx.compile();
   }
 
-  emit(ast: AstNode) {
+  emit(ast: AstNode, scope: SymbolTable) {
     switch (ast.type) {
       case "Program": {
         for (const func of ast.body) {
-          this.emit(func);
+          this.emit(func, scope);
         }
         break;
       }
@@ -40,23 +45,19 @@ export class Compiler {
         const name = ast.id.name;
         const params = {};
         for (const param of ast.params) {
-          switch (param.annotation) {
-            case "f64":
-              params[param.name.name] = NumType.F64;
-              break;
-            default:
-              throw new Error(`Unknown type ${param.annotation}`);
-          }
+          params[param.name.name] = typeFromAnnotation(param.annotation);
         }
         this.ctx.declareFunction({
           name,
           params,
-          results: [NumType.F64],
+          results: [typeFromAnnotation(ast.returnType)],
           export: ast.public,
         });
+
+        const funcScope = scope.lookupFunction(name).scope;
         this.ctx.defineFunction(name, (exp) => {
           this.exp = exp;
-          this.emit(ast.body);
+          this.emit(ast.body, funcScope);
         });
         break;
       }
@@ -64,10 +65,11 @@ export class Compiler {
         break;
       }
       case "BinaryExpression": {
-        this.emit(ast.left);
-        this.emit(ast.right);
+        this.emit(ast.left, scope);
+        this.emit(ast.right, scope);
         switch (ast.operator) {
           case "+":
+            // TODO: Check the type
             this.exp.f64Add();
             break;
           case "*":
@@ -80,9 +82,22 @@ export class Compiler {
       }
       case "CallExpression": {
         for (const arg of ast.args) {
-          this.emit(arg);
+          this.emit(arg, scope);
         }
         this.exp.call(ast.callee.name);
+        break;
+      }
+      case "ExpressionPath": {
+        const enumSymbol = scope.lookupEnum(ast.head.name);
+        const variantIndex = enumSymbol.variants.findIndex((variant) => {
+          if (variant.valueType != null) {
+            throw new Error("TODO: Support enum variants with values");
+          }
+          return variant.name === ast.tail.name;
+        });
+        // TODO: Support enum variants with values
+        // For now we'll represent enum variants as i32s of their index.
+        this.exp.i32Const(variantIndex);
         break;
       }
       case "Identifier": {
@@ -93,15 +108,33 @@ export class Compiler {
         if (typeof ast.value !== "number") {
           throw new Error(`Unknown literal: ${ast.value}`);
         }
-        this.exp.f64Const(ast.value);
+        const type = typeFromAnnotation(ast.annotation);
+
+        switch (type) {
+          case NumType.F32:
+            this.exp.f32Const(ast.value);
+            break;
+          case NumType.F64:
+            this.exp.f64Const(ast.value);
+            break;
+          case NumType.I32:
+            this.exp.i32Const(ast.value);
+            break;
+          case NumType.I64:
+            this.exp.i64Const(ast.value);
+          default:
+            throw new Error(
+              `Unknown primitive literal name: ${ast.annotation.name}`,
+            );
+        }
         break;
       }
       case "IfStatement": {
-        this.emit(ast.test);
+        this.emit(ast.test, scope);
         // Need to cast to i32 because wasm doesn't have a bool type.
         this.exp.i32TruncF64S();
         this.exp.if({ kind: "EMPTY" }, (exp) => {
-          this.emit(ast.consequent);
+          this.emit(ast.consequent, scope);
         });
         ast.alternate;
         break;
@@ -110,5 +143,25 @@ export class Compiler {
         // @ts-ignore
         throw new Error(`Unknown node type: ${ast.type}`);
     }
+  }
+}
+
+function typeFromAnnotation(annotation: TypeAnnotation): NumType {
+  switch (annotation.type) {
+    case "PrimitiveType":
+      switch (annotation.name) {
+        case "f64":
+          return NumType.F64;
+        case "i32":
+          return NumType.I32;
+        default:
+          throw new Error(`Unknown type ${annotation}`);
+      }
+    case "Identifier":
+      // TODO: Support user-defined types
+      return NumType.I32;
+    default:
+      // @ts-ignore
+      throw new Error(`Unknown TypeAnnotation ${annotation.type}`);
   }
 }

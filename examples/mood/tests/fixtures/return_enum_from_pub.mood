@@ -1,0 +1,8 @@
+enum Boolean {
+  True,
+  False
+}
+
+pub fn test(): Boolean {
+  Boolean::True
+}
