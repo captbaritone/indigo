@@ -1,4 +1,4 @@
-export type AstNode = Program | FunctionDeclaration | Expression;
+export type AstNode = Program | Declaration | Expression;
 type Expression =
   | Identifier
   | Literal
@@ -15,9 +15,11 @@ export type Location = {
 
 type Program = {
   type: "Program";
-  body: FunctionDeclaration[];
+  body: Declaration[];
   loc: Location;
 };
+
+type Declaration = FunctionDeclaration | EnumDeclaration;
 
 type FunctionDeclaration = {
   type: "FunctionDeclaration";
@@ -26,6 +28,19 @@ type FunctionDeclaration = {
   public: boolean;
   body: Expression;
   returnType: TypeAnnotation;
+  loc: Location;
+};
+
+type EnumDeclaration = {
+  type: "EnumDeclaration";
+  id: Identifier;
+  variants: Variant[];
+  loc: Location;
+};
+
+type Variant = {
+  type: "Variant";
+  id: Identifier;
   loc: Location;
 };
 

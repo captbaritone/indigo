@@ -60,6 +60,9 @@ export class Compiler {
         });
         break;
       }
+      case "EnumDeclaration": {
+        break;
+      }
       case "BinaryExpression": {
         this.emit(ast.left);
         this.emit(ast.right);

@@ -12,13 +12,17 @@ Start
   = Program
 
 Program
-  = functions:(Function __)* {
+  = declarations:(Declaration __)* {
     return {
       type: 'Program',
-      body: extractList(functions, 0),
+      body: extractList(declarations, 0),
       loc: location()
     };
   }
+
+Declaration
+  = FunctionDeclaration
+  / EnumDeclaration
 
 CallExpression
   = callee:Identifier __ "(" __ args:ArgumentList __ ")" {
@@ -35,9 +39,24 @@ ArgumentList
     return buildList(head, tail, 3);
   }
 
-Function 
+FunctionDeclaration
   = pub:PubToken? __ FnToken __ id:Identifier __ "(" params:ParameterList ")" __ ":" __ returnType:Type __ body:FunctionBody {
     return { type: "FunctionDeclaration", id, params, body, public: !!pub, returnType, loc: location() };
+  }
+
+EnumDeclaration
+  = "enum" __ id:Identifier __ "{" __ variants:VariantList __ "}" {
+    return { type: "EnumDeclaration", id, variants, loc: location() };
+  }
+
+VariantList
+  = head:Variant tail:(__ "," __ Variant)* {
+    return buildList(head, tail, 3);
+  }
+
+Variant
+  = id:Identifier __ {
+    return { type: "Variant", id, loc: location() };
   }
 
 FunctionBody 

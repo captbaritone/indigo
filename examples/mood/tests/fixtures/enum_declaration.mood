@@ -1,0 +1,8 @@
+enum Boolean {
+  True,
+  False
+}
+
+pub fn test(): i32 {
+  10_i32
+}

@@ -25,6 +25,10 @@ type Type_ =
       type: "function";
       params: Type_[];
       result: Type_;
+    }
+  | {
+      type: "enum";
+      variants: { name: string; valueType: Type_ | null }[];
     };
 
 class Scope {
@@ -89,7 +93,21 @@ class TypeChecker {
           result,
         });
 
-        return this.expectType(node.body, result, functionScope);
+        this.expectType(node.body, result, functionScope);
+        // A declaration has no type itself.
+        return { type: "empty" };
+      }
+      case "EnumDeclaration": {
+        scope.define(node.id.name, {
+          type: "enum",
+          variants: node.variants.map((variant) => ({
+            name: variant.id.name,
+            valueType: null,
+          })),
+        });
+        // A declaration has no type itself.
+        return { type: "empty" };
+        break;
       }
       case "Identifier": {
         const type = scope.lookup(node.name);
