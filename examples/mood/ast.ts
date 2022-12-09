@@ -5,7 +5,8 @@ type Expression =
   | IfStatement
   | BinaryExpression
   | CallExpression
-  | ExpressionPath;
+  | ExpressionPath
+  | BlockExpression;
 
 type Position = { offset: number; line: number; column: number };
 
@@ -27,8 +28,14 @@ type FunctionDeclaration = {
   id: Identifier;
   params: Parameter[];
   public: boolean;
-  body: Expression;
+  body: BlockExpression;
   returnType: TypeAnnotation;
+  loc: Location;
+};
+
+type BlockExpression = {
+  type: "BlockExpression";
+  expressions: Expression[];
   loc: Location;
 };
 

@@ -52,6 +52,13 @@ class TypeChecker {
         // A declaration has no type itself.
         return { type: "empty" };
       }
+      case "BlockExpression": {
+        let lastType: SymbolType = { type: "empty" };
+        for (const child of node.expressions) {
+          lastType = this.tc(child, scope);
+        }
+        return lastType;
+      }
       case "EnumDeclaration": {
         scope.define(node.id.name, {
           type: "enum",

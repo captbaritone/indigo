@@ -594,7 +594,25 @@ export class ExpressionContext {
    * https://webassembly.github.io/spec/core/binary/instructions.html#parametric-instructions
    */
 
-  // TODO
+  drop() {
+    this._bytes.push(0x1a);
+  }
+  /**
+   * The select instruction selects one of its first two operands based on
+   * whether its third operand is zero or not. It may include a value type
+   * determining the type of these operands. If missing, the operands must be of
+   * numeric type.
+   *
+   * Note: In future versions of WebAssembly, the type annotation on  may allow
+   * for more than a single value being selected at the same time.
+   */
+  select(t?: ValType[]) {
+    this._bytes.push(0x1b);
+    if (t != null) {
+      // TODO: Need to support _writeVec on this class.
+      throw new Error("Select return types are not yet supported.");
+    }
+  }
 
   /**
    * Variable Instructions

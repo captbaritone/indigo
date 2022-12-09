@@ -61,7 +61,21 @@ export class Compiler {
         });
         break;
       }
+      case "BlockExpression": {
+        if (ast.expressions.length === 0) {
+          break;
+        }
+        for (let i = 0; i < ast.expressions.length; i++) {
+          this.emit(ast.expressions[i], scope);
+          if (i < ast.expressions.length - 1) {
+            this.exp.drop();
+          }
+        }
+        break;
+      }
       case "EnumDeclaration": {
+        // This is just a type declaration, which we processed during type
+        // checking. No need to emit anything.
         break;
       }
       case "BinaryExpression": {

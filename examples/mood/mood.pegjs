@@ -71,8 +71,13 @@ Variant
   }
 
 FunctionBody 
-  = "{" __ body:Expression __ "}" {
+  = "{" __ body:BlockExpression __ "}" {
     return body;
+  }
+
+BlockExpression
+  = head:Expression tail:(__ ";" __ Expression)* {
+    return { type: "BlockExpression", expressions: buildList(head, tail, 3), loc: location() };
   }
 
 ParameterList
