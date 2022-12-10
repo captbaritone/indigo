@@ -157,7 +157,6 @@ class TypeChecker {
     const actual = this.tc(node, scope);
     if (actual.type !== type.type) {
       if (node.loc == null) {
-        console.log(node);
         throw new Error("Node has no location");
       }
       throw new DiagnosticError(
