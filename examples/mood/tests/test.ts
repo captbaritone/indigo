@@ -6,14 +6,21 @@ import { diff } from "jest-diff";
 import { catchToResult } from "../DiagnosticError";
 
 const WRITE_FIXTURES = process.argv.some((arg) => arg === "--write");
+const filter = process.argv.find((arg) => arg.startsWith("--filter="));
+
+const filterRegex = filter != null ? new RegExp(filter.slice(9)) : null;
 const fixturesDir = path.join(__dirname, "fixtures");
 
 const testFixtures: string[] = [];
 const otherFiles: Set<string> = new Set();
+const skip: Set<string> = new Set();
 
 for (const fileName of fs.readdirSync(fixturesDir)) {
   if (fileName.endsWith(".mood")) {
     testFixtures.push(fileName);
+    if (filterRegex != null && !fileName.match(filterRegex)) {
+      skip.add(fileName);
+    }
   } else {
     otherFiles.add(fileName);
   }
@@ -28,6 +35,10 @@ for (const fixture of testFixtures) {
     otherFiles.delete(expectedFileName);
   } else {
     fs.writeFileSync(expectedFilePath, "", "utf-8");
+  }
+  if (skip.has(fixture)) {
+    console.log("SKIP: " + fixture);
+    continue;
   }
   const expectedContent = fs.readFileSync(expectedFilePath, "utf-8");
 
@@ -79,18 +90,6 @@ if (otherFiles.size > 0) {
 }
 
 function evaluate(code: string, fileName: string): string {
-  if (process.env.HANDWRITTEN_PARSER) {
-    try {
-      const ast = catchToResult(() => Parser.parse(code));
-      if (ast.type === "error") {
-        return ast.value.asCodeFrame(code, fileName);
-      } else {
-        return JSON.stringify(ast, null, 2);
-      }
-    } catch (e) {
-      return e.stack;
-    }
-  }
   try {
     const binary = compile(code);
     if (binary.type === "error") {
