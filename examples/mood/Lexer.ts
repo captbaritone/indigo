@@ -32,6 +32,12 @@ export type IdentifierToken = {
   loc: Location;
 };
 
+export type NumberToken = {
+  type: "Number";
+  value: string;
+  loc: Location;
+};
+
 export type EofToken = {
   type: "EOF";
   loc: Location;
@@ -47,11 +53,7 @@ export type Token =
       loc: Location;
     }
   | IdentifierToken
-  | {
-      type: "Number";
-      value: string;
-      loc: Location;
-    }
+  | NumberToken
   | EofToken;
 
 export function lex(code: string): Token[] {
@@ -222,12 +224,12 @@ class Lexer {
             while (isNumeric(code[this.position])) {
               number += code[this.position];
               this.position++;
-              this.tokens.push({
-                type: "Number",
-                value: number,
-                loc: this.loc(),
-              });
             }
+            this.tokens.push({
+              type: "Number",
+              value: number,
+              loc: this.loc(),
+            });
             break;
           }
           throw new Error("Failed to progress reading char " + char);

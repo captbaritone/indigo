@@ -16,9 +16,11 @@ import {
   BinaryExpression,
   Literal,
   NumericType,
+  VariableDeclaration,
+  ExpressionPath,
 } from "./ast";
 import DiagnosticError, { annotate } from "./DiagnosticError";
-import { Token, lex, IdentifierToken } from "./lexer";
+import { Token, lex, IdentifierToken, NumberToken } from "./lexer";
 
 const GRAMMAR = fs.readFileSync("./examples/mood/mood.pegjs", "utf-8");
 
@@ -64,7 +66,7 @@ class Parser {
   parseProgram(): Program {
     const start = this.nextLoc();
     const body: Declaration[] = [];
-    while (this._tokens.length > 0) {
+    while (this.peek().type !== "EOF") {
       body.push(this.parseDefinition());
     }
     return {
@@ -80,7 +82,7 @@ class Parser {
       return this.parseEnumDeclaration();
     }
     if (this.peekFunctionDeclaration()) {
-      this.parseFunctionDeclaration();
+      return this.parseFunctionDeclaration();
     }
     throw new DiagnosticError(
       "Expected a definition.",
@@ -124,8 +126,8 @@ class Parser {
     const params: Parameter[] = [];
     while (this.peek().type !== ")" && this.peek().type !== "EOF") {
       params.push(this.parseParameter());
-      if (this.peek().type !== ",") {
-        break;
+      if (this.peek().type === ",") {
+        this.next();
       }
     }
     return params;
@@ -152,10 +154,11 @@ class Parser {
     const expressions: Expression[] = [];
     while (this.peek().type !== "}" && this.peek().type !== "EOF") {
       expressions.push(this.parseExpression());
-      if (this.peek().type !== ";") {
-        break;
+      if (this.peek().type === ";") {
+        this.next();
       }
     }
+    this.expect("}");
     return {
       type: "BlockExpression",
       expressions,
@@ -165,15 +168,58 @@ class Parser {
 
   // Expression ::= Identifier | Literal | BlockExpression
   parseExpression(): Expression {
+    if (this.peekVariableDeclaration()) {
+      return this.parseVariableDeclaration();
+    }
+    if (this.peek().type == "Identifier") {
+      const identifier = this.parseIdentifier();
+      if (this.peek().type === "::") {
+        return this.parserExpressionPath(identifier);
+      }
+      return identifier;
+    }
+    // TODO: This will trigger an error indicating we expected a liter.
+    // in reality we expect some expression head
     return this.parseLiteral();
+  }
+
+  // ExpressionPath ::= Identifier "::" Identifier
+  parserExpressionPath(head: Identifier): ExpressionPath {
+    this.expect("::");
+    const tail = this.parseIdentifier();
+    return {
+      type: "ExpressionPath",
+      head,
+      tail,
+      loc: this.locRange(head.loc, tail.loc),
+    };
+  }
+
+  peekVariableDeclaration(): boolean {
+    return this.peek().type === "let";
+  }
+
+  // VariableDeclaration ::= "let" Identifier ":" TypeAnnotation "=" Expression
+  parseVariableDeclaration(): VariableDeclaration {
+    const start = this.nextLoc();
+    this.expect("let");
+    const name = this.parseIdentifier();
+    this.expect(":");
+    const annotation = this.parseTypeAnnotation();
+    this.expect("=");
+    const value = this.parseExpression();
+    return {
+      type: "VariableDeclaration",
+      name,
+      value,
+      annotation,
+      loc: this.locToPrev(start),
+    };
   }
 
   parseLiteral(): Literal {
     const start = this.nextLoc();
-    const digits = this.expect("Number");
-    this.expect(".");
-    const decimal = this.expect("Number");
-    const value = parseFloat(`${digits}.${decimal}`);
+    const value = this.parseNumber();
     this.expect("_");
     const annotation = this.parseNumericType();
     return {
@@ -182,6 +228,16 @@ class Parser {
       annotation,
       loc: this.locToPrev(start),
     };
+  }
+
+  parseNumber(): number {
+    const digits = this.expect("Number") as NumberToken;
+    if (this.peek().type === ".") {
+      this.next();
+      const decimal = this.expect("Number") as NumberToken;
+      return parseFloat(`${digits.value}.${decimal.value}`);
+    }
+    return parseFloat(digits.value);
   }
 
   parseNumericType(): NumericType {
@@ -263,10 +319,10 @@ class Parser {
   // VariantList ::= Variant ("," Variant)*
   parseVariantList(): Variant[] {
     const variants: Variant[] = [];
-    while (this.peek().type !== ")" && this.peek().type !== "EOF") {
+    while (this.peek().type !== "}" && this.peek().type !== "EOF") {
       variants.push(this.parseVariant());
-      if (this.peek().type !== ",") {
-        break;
+      if (this.peek().type === ",") {
+        this.next();
       }
     }
     return variants;
