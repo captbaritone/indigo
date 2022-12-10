@@ -17,6 +17,7 @@ test("Echo", async (t) => {
   });
 
   const instance = await context.getInstance();
+  // @ts-ignore
   assert.equal(instance.exports.echo(1), 1);
 });
 
@@ -35,6 +36,7 @@ test("Add", async (t) => {
   });
 
   const instance = await context.getInstance();
+  // @ts-ignore
   assert.equal(instance.exports.add(1, 2), 3);
 });
 
@@ -64,6 +66,7 @@ test("Function call", async (t) => {
   });
 
   const instance = await context.getInstance();
+  // @ts-ignore
   assert.equal(instance.exports.twenty(), 20);
 });
 
@@ -92,7 +95,9 @@ test("Global", async (t) => {
   });
 
   const instance = await context.getInstance();
+  // @ts-ignore
   assert.equal(instance.exports.getG(), 2);
+  // @ts-ignore
   assert.equal(instance.exports.getG(), 3);
 });
 
@@ -116,10 +121,12 @@ test("Tiny compiler", async () => {
   };
 
   ctx.defineFunction("run", (exp) => {
+    // @ts-ignore
     compile(exp, ast);
   });
 
   const instance = await ctx.getInstance();
+  // @ts-ignore
   assert.equal(instance.exports.run(), 4);
 });
 
@@ -127,16 +134,19 @@ test("Tiny compiler", async () => {
 function compile(exp: FunctionContext, node: any) {
   switch (node.type) {
     case "num":
+      // @ts-ignore
       exp.i32Const(node.value);
       break;
     case "add":
       compile(exp, node.left);
       compile(exp, node.right);
+      // @ts-ignore
       exp.i32Add();
       break;
     case "sub":
       compile(exp, node.left);
       compile(exp, node.right);
+      // @ts-ignore
       exp.i32Sub();
       break;
     default:
