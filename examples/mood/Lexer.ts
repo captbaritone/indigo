@@ -1,4 +1,4 @@
-import { Position } from "./ast";
+import { Location } from "./ast";
 
 type Keyword =
   | "fn"
@@ -29,28 +29,28 @@ type Syntax =
 export type IdentifierToken = {
   type: "Identifier";
   value: string;
-  pos: Position;
+  loc: Location;
 };
 
 export type EofToken = {
   type: "EOF";
-  pos: Position;
+  loc: Location;
 };
 
 export type Token =
   | {
       type: Keyword;
-      pos: Position;
+      loc: Location;
     }
   | {
       type: Syntax;
-      pos: Position;
+      loc: Location;
     }
   | IdentifierToken
   | {
       type: "Number";
       value: string;
-      pos: Position;
+      loc: Location;
     }
   | EofToken;
 
@@ -61,23 +61,37 @@ export function lex(code: string): Token[] {
 
 class Lexer {
   tokens: Token[];
-  position: number;
-  line: number;
+  position: number = 0;
+  line: number = 0;
+  lineStart: number = 0;
+  lastPosition: number = 0;
+  lastLine: number = 0;
+  lastLineStart: number = 0;
   constructor() {
     this.tokens = [];
   }
 
   literal(literal: Keyword | Syntax) {
-    this.tokens.push({ type: literal, pos: this.pos() });
+    this.position += literal.length;
+    this.tokens.push({ type: literal, loc: this.loc() });
   }
 
-  pos(): Position {
-    return { offset: this.position, line: this.line, column: 0 };
+  loc(): Location {
+    return {
+      start: {
+        offset: this.lastPosition,
+        line: this.lastLine + 1,
+        column: this.lastPosition - this.lastLineStart + 1,
+      },
+      end: {
+        offset: this.position,
+        line: this.line + 1,
+        column: this.position - this.lineStart + 1,
+      },
+    };
   }
 
   lex(code: string): Token[] {
-    this.position = 0;
-    this.line = 1;
     // let lastPosition = -1;
     while (this.position < code.length) {
       /*
@@ -97,6 +111,7 @@ class Lexer {
         case "\n":
           this.line++;
           this.position++;
+          this.lineStart = this.position;
           break;
         case "(":
         case ")":
@@ -112,15 +127,12 @@ class Lexer {
         case ".":
         case "_":
           this.literal(char);
-          this.position++;
           break;
         case ":":
           if (code[this.position + 1] === ":") {
             this.literal("::");
-            this.position += 2;
           } else {
             this.literal(":");
-            this.position++;
           }
           break;
         case "e":
@@ -130,7 +142,6 @@ class Lexer {
             code[this.position + 3] === "m"
           ) {
             this.literal("enum");
-            this.position += 4;
             break;
           }
           if (
@@ -139,19 +150,16 @@ class Lexer {
             code[this.position + 3] === "e"
           ) {
             this.literal("else");
-            this.position += 4;
             break;
           }
         case "f":
           if (code[this.position + 1] === "n") {
             this.literal("fn");
-            this.position += 2;
             break;
           }
         case "i": {
           if (code[this.position + 1] === "f") {
             this.literal("if");
-            this.position += 2;
             break;
           }
         }
@@ -161,7 +169,6 @@ class Lexer {
             code[this.position + 2] === "t"
           ) {
             this.literal("let");
-            this.position += 3;
             break;
           }
         case "p":
@@ -170,7 +177,6 @@ class Lexer {
             code[this.position + 2] === "b"
           ) {
             this.literal("pub");
-            this.position += 3;
             break;
           }
 
@@ -183,7 +189,6 @@ class Lexer {
             code[this.position + 5] === "n"
           ) {
             this.literal("return");
-            this.position += 6;
             break;
           }
         case "w":
@@ -194,7 +199,6 @@ class Lexer {
             code[this.position + 4] === "e"
           ) {
             this.literal("while");
-            this.position += 5;
             break;
           }
         default:
@@ -208,7 +212,7 @@ class Lexer {
             this.tokens.push({
               type: "Identifier",
               value: identifier,
-              pos: this.pos(),
+              loc: this.loc(),
             });
             break;
           }
@@ -221,16 +225,19 @@ class Lexer {
               this.tokens.push({
                 type: "Number",
                 value: number,
-                pos: this.pos(),
+                loc: this.loc(),
               });
             }
             break;
           }
           throw new Error("Failed to progress reading char " + char);
       }
+      this.lastPosition = this.position;
+      this.lastLine = this.line;
+      this.lastLineStart = this.lineStart;
     }
 
-    this.tokens.push({ type: "EOF", pos: this.pos() });
+    this.tokens.push({ type: "EOF", loc: this.loc() });
 
     return this.tokens;
   }

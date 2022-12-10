@@ -62,6 +62,7 @@ class Parser {
 
   // Program ::= Definition*
   parseProgram(): Program {
+    const start = this.nextLoc();
     const body: Declaration[] = [];
     while (this._tokens.length > 0) {
       body.push(this.parseDefinition());
@@ -69,7 +70,7 @@ class Parser {
     return {
       type: "Program",
       body,
-      loc: this.dummyLoc(),
+      loc: this.locToPrev(start),
     };
   }
 
@@ -83,7 +84,7 @@ class Parser {
     }
     throw new DiagnosticError(
       "Expected a definition.",
-      annotate(this.dummyLoc(), `Found ${this.peek().type}`),
+      annotate(this.nextLoc(), `Found ${this.peek().type}`),
     );
   }
 
@@ -94,6 +95,7 @@ class Parser {
   // FunctionDeclaration ::= "pub"? "fn" Identifier "(" ParameterList ")" ":"
   //                         TypeAnnotation BlockExpression
   parseFunctionDeclaration(): FunctionDeclaration {
+    const start = this.nextLoc();
     const pub = this.peek().type === "pub";
     if (pub) {
       this.next();
@@ -105,14 +107,13 @@ class Parser {
     this.expect(")");
     this.expect(":");
     const returnType = this.parseTypeAnnotation();
-    console.log({ returnType });
     const body = this.parseBlockExpression();
     return {
       type: "FunctionDeclaration",
       id,
       params,
       body,
-      loc: this.dummyLoc(),
+      loc: this.locToPrev(start),
       public: pub,
       returnType,
     };
@@ -132,6 +133,7 @@ class Parser {
 
   // Parameter ::= Identifier ":" TypeAnnotation
   parseParameter(): Parameter {
+    const start = this.nextLoc();
     const name = this.parseIdentifier();
     this.expect(":");
     const annotation = this.parseTypeAnnotation();
@@ -139,12 +141,13 @@ class Parser {
       type: "Parameter",
       name,
       annotation,
-      loc: this.dummyLoc(),
+      loc: this.locToPrev(start),
     };
   }
 
   // BlockExpression ::= "{" Expression ("," Expression)* "}"
   parseBlockExpression(): BlockExpression {
+    const start = this.nextLoc();
     this.expect("{");
     const expressions: Expression[] = [];
     while (this.peek().type !== "}" && this.peek().type !== "EOF") {
@@ -156,7 +159,7 @@ class Parser {
     return {
       type: "BlockExpression",
       expressions,
-      loc: this.dummyLoc(),
+      loc: this.locToPrev(start),
     };
   }
 
@@ -166,6 +169,7 @@ class Parser {
   }
 
   parseLiteral(): Literal {
+    const start = this.nextLoc();
     const digits = this.expect("Number");
     this.expect(".");
     const decimal = this.expect("Number");
@@ -176,7 +180,7 @@ class Parser {
       type: "Literal",
       value,
       annotation,
-      loc: this.dummyLoc(),
+      loc: this.locToPrev(start),
     };
   }
 
@@ -195,6 +199,7 @@ class Parser {
 
   // BinaryExpression ::= Expression Operator Expression
   parseBinaryExpression(): BinaryExpression {
+    const start = this.nextLoc();
     const left = this.parseExpression();
     const operator = this.parseOperator();
     const right = this.parseExpression();
@@ -204,7 +209,7 @@ class Parser {
       left,
       operator,
       right,
-      loc: this.dummyLoc(),
+      loc: this.locToPrev(start),
     };
   }
 
@@ -217,7 +222,7 @@ class Parser {
     }
     throw new DiagnosticError(
       "Expected an operator",
-      annotate(this.dummyLoc(), `Found ${token.type}`),
+      annotate(token.loc, `Found ${token.type}`),
     );
   }
 
@@ -241,6 +246,7 @@ class Parser {
 
   // EnumDeclaration ::= "enum" Identifier "{" VariantList "}"
   parseEnumDeclaration(): EnumDeclaration {
+    const start = this.nextLoc();
     this.expect("enum");
     const id = this.parseIdentifier();
     this.expect("{");
@@ -250,7 +256,7 @@ class Parser {
       type: "EnumDeclaration",
       id,
       variants,
-      loc: this.dummyLoc(),
+      loc: this.locToPrev(start),
     };
   }
 
@@ -268,10 +274,11 @@ class Parser {
 
   // Variant ::= Identifier
   parseVariant(): Variant {
+    const start = this.nextLoc();
     return {
       type: "Variant",
       id: this.parseIdentifier(),
-      loc: this.dummyLoc(),
+      loc: this.locToPrev(start),
     };
   }
 
@@ -281,7 +288,7 @@ class Parser {
     return {
       type: "Identifier",
       name: token.value,
-      loc: this.dummyLoc(),
+      loc: token.loc,
     };
   }
 
@@ -292,7 +299,7 @@ class Parser {
     throw new DiagnosticError(
       `Expected ${type} but found ${this.peek().type}`,
       annotate(
-        this.dummyLoc(),
+        this.nextLoc(),
         `Expected ${type} but found ${this.peek().type}`,
       ),
     );
@@ -306,18 +313,19 @@ class Parser {
     return this._tokens[this._nextIndex];
   }
 
-  dummyLoc(): Location {
-    return {
-      start: {
-        offset: 0,
-        line: 0,
-        column: 0,
-      },
-      end: {
-        offset: 0,
-        line: 0,
-        column: 0,
-      },
-    };
+  nextLoc(): Location {
+    return this._tokens[this._nextIndex].loc;
+  }
+
+  prevLoc(): Location {
+    return this._tokens[this._nextIndex - 1].loc;
+  }
+
+  locToPrev(start: Location): Location {
+    return this.locRange(start, this.prevLoc());
+  }
+
+  locRange(start: Location, end: Location): Location {
+    return { start: start.start, end: end.end };
   }
 }
