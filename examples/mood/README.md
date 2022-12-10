@@ -6,6 +6,9 @@ Mood, (codename, real name TBD) is a toy language with a goal of being self-host
 
 Keeping track of the many many things still needed to be done:
 
+- Ensure public functions can only return numbers
+  - Maybe in the future we can support a js bridge but for now
+    support returning numbers.
 - Conditionals
 - Loops
 - Two pass type checking (check top level declarations first to support recursive types)
