@@ -1,5 +1,5 @@
 export type AstNode = Program | Declaration | Expression;
-type Expression =
+export type Expression =
   | Identifier
   | Literal
   | IfStatement
@@ -9,22 +9,22 @@ type Expression =
   | BlockExpression
   | VariableDeclaration;
 
-type Position = { offset: number; line: number; column: number };
+export type Position = { offset: number; line: number; column: number };
 
 export type Location = {
   start: Position;
   end: Position;
 };
 
-type Program = {
+export type Program = {
   type: "Program";
   body: Declaration[];
   loc: Location;
 };
 
-type Declaration = FunctionDeclaration | EnumDeclaration;
+export type Declaration = FunctionDeclaration | EnumDeclaration;
 
-type FunctionDeclaration = {
+export type FunctionDeclaration = {
   type: "FunctionDeclaration";
   id: Identifier;
   params: Parameter[];
@@ -34,38 +34,38 @@ type FunctionDeclaration = {
   loc: Location;
 };
 
-type BlockExpression = {
+export type BlockExpression = {
   type: "BlockExpression";
   expressions: Expression[];
   loc: Location;
 };
 
-type EnumDeclaration = {
+export type EnumDeclaration = {
   type: "EnumDeclaration";
   id: Identifier;
   variants: Variant[];
   loc: Location;
 };
 
-type Variant = {
+export type Variant = {
   type: "Variant";
   id: Identifier;
   loc: Location;
 };
 
-type Parameter = {
+export type Parameter = {
   type: "Parameter";
   name: Identifier;
   annotation: TypeAnnotation;
   loc: Location;
 };
 
-type NumericType = {
+export type NumericType = {
   type: "PrimitiveType";
   name: "f64" | "i32";
 };
 
-type VariableDeclaration = {
+export type VariableDeclaration = {
   type: "VariableDeclaration";
   name: Identifier;
   value: Expression;
@@ -75,34 +75,34 @@ type VariableDeclaration = {
 
 export type TypeAnnotation = NumericType | Identifier;
 
-type Identifier = {
+export type Identifier = {
   type: "Identifier";
   name: string;
   loc: Location;
 };
 
-type Literal = {
+export type Literal = {
   type: "Literal";
   value: number | string;
   annotation: NumericType;
   loc: Location;
 };
 
-type CallExpression = {
+export type CallExpression = {
   type: "CallExpression";
   callee: Identifier;
   args: Expression[];
   loc: Location;
 };
 
-type ExpressionPath = {
+export type ExpressionPath = {
   type: "ExpressionPath";
   head: Identifier;
   tail: Identifier;
   loc: Location;
 };
 
-type BinaryExpression = {
+export type BinaryExpression = {
   type: "BinaryExpression";
   left: Expression;
   right: Expression;
@@ -110,7 +110,7 @@ type BinaryExpression = {
   loc: Location;
 };
 
-type IfStatement = {
+export type IfStatement = {
   type: "IfStatement";
   test: Expression;
   consequent: Expression;

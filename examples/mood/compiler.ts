@@ -1,13 +1,9 @@
 import { ExpressionContext, ModuleContext } from "../..";
 import { NumType } from "../../types";
 import { AstNode, TypeAnnotation } from "./ast";
-import parser from "./parser";
+import * as Parser from "./Parser";
 import { typeCheck } from "./typechecker";
-import DiagnosticError, {
-  Result,
-  catchToResult,
-  annotate,
-} from "./DiagnosticError";
+import { Result, catchToResult, annotate } from "./DiagnosticError";
 import SymbolTable from "./SymbolTable";
 
 export default function compile(source: string): Result<Uint8Array> {
@@ -15,7 +11,7 @@ export default function compile(source: string): Result<Uint8Array> {
 }
 
 function compileImpl(source: string): Uint8Array {
-  const ast = parser.parse(source) as AstNode;
+  const ast = Parser.parse(source) as AstNode;
   const scope = typeCheck(ast); // throws DiagnosticError if type errors are detected
   const compiler = new Compiler();
   compiler.emit(ast, scope);

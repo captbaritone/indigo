@@ -1,7 +1,9 @@
 import compile from "../compiler";
+import * as Parser from "../Parser";
 import fs from "fs";
 import path from "path";
 import { diff } from "jest-diff";
+import { catchToResult } from "../DiagnosticError";
 
 const WRITE_FIXTURES = process.argv.some((arg) => arg === "--write");
 const fixturesDir = path.join(__dirname, "fixtures");
@@ -77,6 +79,18 @@ if (otherFiles.size > 0) {
 }
 
 function evaluate(code: string, fileName: string): string {
+  if (process.env.HANDWRITTEN_PARSER) {
+    try {
+      const ast = catchToResult(() => Parser.parse(code));
+      if (ast.type === "error") {
+        return ast.value.asCodeFrame(code, fileName);
+      } else {
+        return JSON.stringify(ast, null, 2);
+      }
+    } catch (e) {
+      return e.stack;
+    }
+  }
   try {
     const binary = compile(code);
     if (binary.type === "error") {
