@@ -1,4 +1,3 @@
-import { AstNode } from "./ast";
 import * as Parser from "./Parser";
 import { typeCheck } from "./TypeChecker";
 import * as Emitter from "./WasmEmitter";
