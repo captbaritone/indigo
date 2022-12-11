@@ -1,5 +1,3 @@
-import peg from "pegjs";
-import fs from "fs";
 import {
   AstNode,
   Declaration,
@@ -24,31 +22,10 @@ import {
 import DiagnosticError, { annotate } from "./DiagnosticError";
 import { Token, lex, IdentifierToken, NumberToken } from "./lexer";
 
-const GRAMMAR = fs.readFileSync("./examples/mood/mood.pegjs", "utf-8");
-
-const parser = peg.generate(GRAMMAR);
-
-function pegParse(code: string): AstNode {
-  try {
-    return parser.parse(code);
-  } catch (e) {
-    if (e instanceof parser.SyntaxError) {
-      throw new DiagnosticError(
-        e.message,
-        annotate(e.location, "Syntax error"),
-      );
-    }
-    throw e;
-  }
-}
-
 export function parse(code: string): AstNode {
-  if (process.env.HANDWRITTEN_PARSER) {
-    const tokens = lex(code);
-    const parser = new Parser(tokens);
-    return parser.parse();
-  }
-  return pegParse(code);
+  const tokens = lex(code);
+  const parser = new Parser(tokens);
+  return parser.parse();
 }
 
 // TODO: Get clearer with specifics around trailing commas/semicolons
