@@ -121,7 +121,7 @@ export type BinaryExpression = {
   type: "BinaryExpression";
   left: Expression;
   right: Expression;
-  operator: "+" | "*";
+  operator: "+" | "*" | "==";
   loc: Location;
 };
 

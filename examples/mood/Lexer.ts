@@ -19,6 +19,7 @@ type Syntax =
   | ","
   | ";"
   | "="
+  | "=="
   | "+"
   | "-"
   | "*"
@@ -121,7 +122,6 @@ class Lexer {
         case "}":
         case ",":
         case ";":
-        case "=":
         case "+":
         case "-":
         case "*":
@@ -129,6 +129,13 @@ class Lexer {
         case ".":
         case "_":
           this.literal(char);
+          break;
+        case "=":
+          if (code[this.position + 1] === "=") {
+            this.literal("==");
+          } else {
+            this.literal("=");
+          }
           break;
         case ":":
           if (code[this.position + 1] === ":") {

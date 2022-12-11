@@ -34,7 +34,14 @@ class TypeChecker {
       }
       case "BinaryExpression": {
         const leftType = this.expectNumeric(node.left, scope);
-        return this.expectType(node.right, leftType, scope);
+        this.expectType(node.right, leftType, scope);
+        switch (node.operator) {
+          case "*":
+          case "+":
+            return leftType;
+          case "==":
+            return { type: "bool" };
+        }
       }
       case "FunctionDeclaration": {
         const functionScope = scope.child();

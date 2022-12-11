@@ -683,6 +683,14 @@ export class ExpressionContext {
    * https://webassembly.github.io/spec/core/binary/instructions.html#numeric-instructions
    */
 
+  i32Eq() {
+    this._bytes.push(0x46);
+  }
+
+  f64Eq() {
+    this._bytes.push(0x5b);
+  }
+
   /**
    * The const instructions are followed by the respective literal.
    */

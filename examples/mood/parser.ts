@@ -148,10 +148,18 @@ class Parser {
   // Expression ::= Identifier | Literal | BlockExpression
   parseExpression(): Expression {
     const exp = this.parseExpressionImpl();
-    if (this.peek().type === "+" || this.peek().type === "*") {
+    if (this.peekBinaryOperator()) {
       return this.parseBinaryExpression(exp);
     }
     return exp;
+  }
+
+  peekBinaryOperator(): boolean {
+    return (
+      this.peek().type === "+" ||
+      this.peek().type === "*" ||
+      this.peek().type === "=="
+    );
   }
 
   parseExpressionImpl(): Expression {
@@ -315,11 +323,12 @@ class Parser {
     };
   }
 
-  parseOperator(): "+" | "*" {
+  parseOperator(): "+" | "*" | "==" {
     const token = this.next();
     switch (token.type) {
       case "+":
       case "*":
+      case "==":
         return token.type;
     }
     throw new DiagnosticError(
