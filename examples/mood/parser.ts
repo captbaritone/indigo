@@ -18,6 +18,7 @@ import {
   NumericType,
   VariableDeclaration,
   ExpressionPath,
+  CallExpression,
 } from "./ast";
 import DiagnosticError, { annotate } from "./DiagnosticError";
 import { Token, lex, IdentifierToken, NumberToken } from "./lexer";
@@ -168,23 +169,61 @@ class Parser {
 
   // Expression ::= Identifier | Literal | BlockExpression
   parseExpression(): Expression {
+    const exp = this.parseExpressionImpl();
+    if (this.peek().type === "+" || this.peek().type === "*") {
+      return this.parseBinaryExpression(exp);
+    }
+    return exp;
+  }
+
+  parseExpressionImpl(): Expression {
     if (this.peekVariableDeclaration()) {
       return this.parseVariableDeclaration();
-    }
-    if (this.peek().type == "Identifier") {
+    } else if (this.peek().type == "Identifier") {
       const identifier = this.parseIdentifier();
       if (this.peek().type === "::") {
-        return this.parserExpressionPath(identifier);
+        return this.parseExpressionPath(identifier);
+      } else if (this.peek().type === "(") {
+        return this.parseCallExpression(identifier);
+      } else {
+        return identifier;
       }
-      return identifier;
+    } else if (this.peekLiteral()) {
+      return this.parseLiteral();
     }
-    // TODO: This will trigger an error indicating we expected a liter.
-    // in reality we expect some expression head
-    return this.parseLiteral();
+    throw new Error("Expected an expression, got " + this.peek().type);
+  }
+
+  // CallExpression ::= Identifier "(" ExpressionList ")"
+  parseCallExpression(callee: Identifier): CallExpression {
+    const args = this.parseExpressionList();
+    return {
+      type: "CallExpression",
+      callee: callee,
+      args,
+      loc: this.locRange(callee.loc, this.prevLoc()),
+    };
+  }
+
+  parseExpressionList(): Expression[] {
+    const args: Expression[] = [];
+    this.expect("(");
+    while (this.peek().type !== ")" && this.peek().type !== "EOF") {
+      args.push(this.parseExpression());
+      if (this.peek().type === ",") {
+        this.next();
+      }
+    }
+    this.expect(")");
+    return args;
+  }
+
+  peekLiteral(): boolean {
+    return this.peek().type === "Number";
   }
 
   // ExpressionPath ::= Identifier "::" Identifier
-  parserExpressionPath(head: Identifier): ExpressionPath {
+  parseExpressionPath(head: Identifier): ExpressionPath {
     this.expect("::");
     const tail = this.parseIdentifier();
     return {
@@ -254,9 +293,7 @@ class Parser {
   }
 
   // BinaryExpression ::= Expression Operator Expression
-  parseBinaryExpression(): BinaryExpression {
-    const start = this.nextLoc();
-    const left = this.parseExpression();
+  parseBinaryExpression(left: Expression): BinaryExpression {
     const operator = this.parseOperator();
     const right = this.parseExpression();
 
@@ -265,7 +302,7 @@ class Parser {
       left,
       operator,
       right,
-      loc: this.locToPrev(start),
+      loc: this.locRange(left.loc, right.loc),
     };
   }
 
@@ -353,10 +390,10 @@ class Parser {
       return this.next();
     }
     throw new DiagnosticError(
-      `Expected ${type} but found ${this.peek().type}`,
+      `Expected ${type} but found "${this.peek().type}"`,
       annotate(
         this.nextLoc(),
-        `Expected ${type} but found ${this.peek().type}`,
+        `Expected ${type} but found "${this.peek().type}"`,
       ),
     );
   }
