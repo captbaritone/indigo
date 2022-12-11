@@ -159,6 +159,11 @@ class TypeChecker {
       if (node.loc == null) {
         throw new Error("Node has no location");
       }
+      // The type of a BlockExpression comes from its last expression.
+      // Hack here to make the error message more useful.
+      if (node.type === "BlockExpression" && node.expressions.length > 0) {
+        node = node.expressions[node.expressions.length - 1];
+      }
       throw new DiagnosticError(
         `Expected ${type.type}, got ${actual.type}`,
         annotate(node.loc, "This expression has the wrong type."),

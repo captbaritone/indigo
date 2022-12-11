@@ -2,7 +2,7 @@ import { ExpressionContext, ModuleContext } from "../..";
 import { NumType } from "../../types";
 import { AstNode, TypeAnnotation } from "./ast";
 import * as Parser from "./Parser";
-import { typeCheck } from "./typechecker";
+import { typeCheck } from "./TypeChecker";
 import { Result, catchToResult, annotate } from "./DiagnosticError";
 import SymbolTable from "./SymbolTable";
 

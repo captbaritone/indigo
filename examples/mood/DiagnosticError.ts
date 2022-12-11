@@ -62,7 +62,9 @@ export default class DiagnosticError extends Error {
     const endLine = Math.min(location.end.line, lines.length - 1);
 
     if (location.start.line !== location.end.line) {
-      throw new Error("TODO: Multi-line error reporting");
+      console.log(location.start, location.end);
+      location.end = location.start;
+      // throw new Error("TODO: Multi-line error reporting");
     }
 
     const gutter = String(endLine).length;
