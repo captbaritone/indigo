@@ -9,13 +9,17 @@ import SymbolTable, { SymbolType } from "./SymbolTable";
 export function typeCheck(ast: AstNode): SymbolTable {
   const checker = new TypeChecker();
   const scope = new SymbolTable();
+  addBuiltinTypes(scope);
+  checker.tc(ast, scope);
+  return scope;
+}
+
+function addBuiltinTypes(scope: SymbolTable): void {
   scope.define("bool", { type: "bool" });
   scope.define("true", { type: "bool" });
   scope.define("false", { type: "bool" });
   scope.define("i32", { type: "i32" });
   scope.define("f64", { type: "f64" });
-  checker.tc(ast, scope);
-  return scope;
 }
 
 class TypeChecker {
