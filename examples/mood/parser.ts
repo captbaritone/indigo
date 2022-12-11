@@ -28,7 +28,7 @@ export function parse(code: string): AstNode {
   return parser.parse();
 }
 
-// TODO: Get clearer with specifics around trailing commas/semicolons
+// TODO: Add fixture tests for each error.
 class Parser {
   _tokens: Token[];
   _nextIndex: number;
