@@ -169,7 +169,10 @@ class Parser {
         return identifier;
       }
     }
-    throw new Error("Expected an expression, got " + this.peek().type);
+    throw new DiagnosticError(
+      "Expected an expression, got " + this.peek().type,
+      annotate(this.nextLoc(), "Found " + this.peek().type),
+    );
   }
 
   // CallExpression ::= Identifier "(" ExpressionList ")"
