@@ -1,4 +1,4 @@
-import { AstNode, TypeAnnotation } from "./ast";
+import { AstNode, lastChar, TypeAnnotation, union } from "./ast";
 import DiagnosticError, { annotate } from "./DiagnosticError";
 import SymbolTable, { SymbolType } from "./SymbolTable";
 
@@ -15,10 +15,6 @@ export function typeCheck(ast: AstNode): SymbolTable {
 
 class TypeChecker {
   tc(node: AstNode, scope: SymbolTable): SymbolType {
-    // Invariant. Can be removed once parser stabilizes.
-    if (node.loc == null) {
-      throw new Error(`AstNode with type "${node.type}" has no location.`);
-    }
     switch (node.type) {
       case "Program": {
         let lastType: SymbolType = { type: "empty" };
@@ -85,27 +81,40 @@ class TypeChecker {
         const func = scope.lookup(node.callee.name);
         if (func == null) {
           throw new DiagnosticError(
-            "Undefined function: " + node.callee.name,
-            annotate(node.loc, "This function is not defined."),
+            `Undefined function: "${node.callee.name}"`,
+            annotate(node.callee.loc, "This function is not defined."),
           );
         }
         if (func.type !== "function") {
           throw new DiagnosticError(
-            "Tried calling ${node.callee.name} as a function, but it is not a function.",
-            annotate(node.loc, "This is not a function."),
+            `Tried calling "${node.callee.name}", but "${node.callee.name}" is not a function.`,
+            annotate(node.loc, `"${node.callee.name}" is not a function.`),
           );
         }
 
         if (node.args.length < func.params.length) {
+          const missingCount = func.params.length - node.args.length;
           throw new DiagnosticError(
-            `Too few arguments. Expected ${func.params.length}, but found ${node.args.length}`,
-            annotate(node.loc, "This function requires more arguments."),
+            `Too few arguments. Expected ${func.params.length} but found ${node.args.length}.`,
+            annotate(
+              lastChar(node.loc),
+              `"${node.callee.name}" requires ${missingCount} more ${
+                missingCount === 1 ? "argument" : "arguments"
+              }.`,
+            ),
           );
         }
         if (node.args.length > func.params.length) {
+          const excessCount = node.args.length - func.params.length;
+          const excess = node.args.slice(func.params.length);
+          const firstLoc = excess[0].loc;
+          const lastLoc = excess[excess.length - 1].loc;
           throw new DiagnosticError(
-            `Too many arguments. Expected ${func.params.length}, but found ${node.args.length}`,
-            annotate(node.loc, "This function requires fewer arguments."),
+            `Too many arguments. Expected ${func.params.length} but found ${node.args.length}.`,
+            annotate(
+              union(firstLoc, lastLoc),
+              `These arguments are not accepted by "${node.callee.name}".`,
+            ),
           );
         }
 
@@ -118,23 +127,26 @@ class TypeChecker {
         const type = scope.lookup(node.head.name);
         if (type == null) {
           throw new DiagnosticError(
-            "Undefined variable: " + node.head.name,
-            annotate(node.head.loc, "This variable is not defined."),
+            `Undefined enum "${node.head.name}"`,
+            annotate(node.head.loc, `"${node.head.name}" is not defined.`),
           );
         }
 
         if (type.type !== "enum") {
           throw new DiagnosticError(
             "Expected enum, got " + type.type,
-            annotate(node.head.loc, "This is not an enum."),
+            annotate(node.head.loc, "Expected an enum."),
           );
         }
 
         const variant = type.variants.find((v) => v.name === node.tail.name);
         if (variant == null) {
           throw new DiagnosticError(
-            "Undefined variant: " + node.tail.name,
-            annotate(node.tail.loc, "This variant is not defined."),
+            `Undefined variant "${node.tail.name}"`,
+            annotate(
+              node.tail.loc,
+              `"${node.tail.name}" is not a variant of "${node.head.name}".`,
+            ),
           );
         }
         return type;
@@ -160,12 +172,12 @@ class TypeChecker {
         throw new Error("Node has no location");
       }
       // The type of a BlockExpression comes from its last expression.
-      // Hack here to make the error message more useful.
+      // Special case here to make the error message more useful.
       if (node.type === "BlockExpression" && node.expressions.length > 0) {
         node = node.expressions[node.expressions.length - 1];
       }
       throw new DiagnosticError(
-        `Expected ${type.type}, got ${actual.type}`,
+        `Expected "${type.type}", got "${actual.type}"`,
         annotate(node.loc, "This expression has the wrong type."),
       );
     }
@@ -179,7 +191,7 @@ class TypeChecker {
     const type = this.tc(node, scope);
     if (!(type.type === "f64" || type.type === "i32")) {
       throw new DiagnosticError(
-        `Expected the left hand side of a binary expression to be numeric.`,
+        `Expected a number.`,
         annotate(node.loc, "This expression is not numeric."),
       );
     }

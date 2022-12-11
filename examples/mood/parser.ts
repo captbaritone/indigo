@@ -19,6 +19,7 @@ import {
   VariableDeclaration,
   ExpressionPath,
   CallExpression,
+  union,
 } from "./ast";
 import DiagnosticError, { annotate } from "./DiagnosticError";
 import { Token, lex, IdentifierToken, NumberToken } from "./lexer";
@@ -201,7 +202,7 @@ class Parser {
       type: "CallExpression",
       callee: callee,
       args,
-      loc: this.locRange(callee.loc, this.prevLoc()),
+      loc: union(callee.loc, this.prevLoc()),
     };
   }
 
@@ -230,7 +231,7 @@ class Parser {
       type: "ExpressionPath",
       head,
       tail,
-      loc: this.locRange(head.loc, tail.loc),
+      loc: union(head.loc, tail.loc),
     };
   }
 
@@ -302,7 +303,7 @@ class Parser {
       left,
       operator,
       right,
-      loc: this.locRange(left.loc, right.loc),
+      loc: union(left.loc, right.loc),
     };
   }
 
@@ -415,10 +416,6 @@ class Parser {
   }
 
   locToPrev(start: Location): Location {
-    return this.locRange(start, this.prevLoc());
-  }
-
-  locRange(start: Location, end: Location): Location {
-    return { start: start.start, end: end.end };
+    return union(start, this.prevLoc());
   }
 }

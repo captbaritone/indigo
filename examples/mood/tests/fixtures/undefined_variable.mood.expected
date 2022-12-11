@@ -1,0 +1,7 @@
+Error: Undefined variable: oops:
+ --> undefined_variable.mood:2:5
+
+  | pub fn test(): f64 {
+2 |     oops
+  |     ^^^^ This variable is not defined.
+  | }

@@ -1,4 +1,4 @@
-Error: Expected i32, got f64:
+Error: Expected "i32", got "f64":
  --> type_error.mood:2:3
 
   | pub fn test(): i32 {

@@ -1,0 +1,7 @@
+Error: Too few arguments. Expected 2 but found 1.:
+ --> too_few_arguments.mood:6:14
+
+  | pub fn test(): f64 {
+6 |     sum(1_f64)
+  |              ^ "sum" requires 1 more argument.
+  | }

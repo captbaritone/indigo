@@ -1,0 +1,7 @@
+Error: Expected enum, got function:
+ --> expression_path_from_function.mood:6:5
+
+  | pub fn test(): f64 {
+6 |     func::Bar
+  |     ^^^^ Expected an enum.
+  | }

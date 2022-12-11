@@ -1,0 +1,7 @@
+Error: Undefined variant "Maybe":
+ --> invalid_enum_variant.mood:7:12
+
+  | pub fn test(): i32 {
+7 |   Boolean::Maybe;
+  |            ^^^^^ "Maybe" is not a variant of "Boolean".
+  |   10_i32

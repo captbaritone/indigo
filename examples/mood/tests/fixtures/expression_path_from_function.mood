@@ -1,0 +1,7 @@
+fn func(): f64 {
+    10_f64
+}
+
+pub fn test(): f64 {
+    func::Bar
+}

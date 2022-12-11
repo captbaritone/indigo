@@ -1,0 +1,7 @@
+Error: Undefined function: "oops":
+ --> undefined_function_call.mood:2:5
+
+  | pub fn test(): f64 {
+2 |     oops()
+  |     ^^^^ This function is not defined.
+  | }

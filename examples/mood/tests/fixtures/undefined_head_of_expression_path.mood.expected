@@ -1,0 +1,7 @@
+Error: Undefined enum "Oops":
+ --> undefined_head_of_expression_path.mood:2:3
+
+  | pub fn test(): f64 {
+2 |   Oops::Bar
+  |   ^^^^ "Oops" is not defined.
+  | }

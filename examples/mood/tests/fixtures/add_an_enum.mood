@@ -1,0 +1,6 @@
+enum Foo {
+    Bar
+}
+pub fn test(): f64 {
+    Foo::Bar + 1.0_f64
+}

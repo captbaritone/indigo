@@ -1,0 +1,3 @@
+pub fn test(num: f64): f64 {
+    num::Bar
+}

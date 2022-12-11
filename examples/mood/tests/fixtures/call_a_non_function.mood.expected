@@ -1,0 +1,7 @@
+Error: Tried calling "oops", but "oops" is not a function.:
+ --> call_a_non_function.mood:2:5
+
+  | pub fn test(oops: f64): f64 {
+2 |     oops()
+  |     ^^^^^^ "oops" is not a function.
+  | }
