@@ -88,7 +88,7 @@ export type VariableDeclaration = {
   loc: Location;
 };
 
-export type TypeAnnotation = NumericType | Identifier;
+export type TypeAnnotation = Identifier;
 
 export type Identifier = {
   type: "Identifier";
@@ -98,8 +98,8 @@ export type Identifier = {
 
 export type Literal = {
   type: "Literal";
-  value: number | string;
-  annotation: NumericType;
+  value: any;
+  annotation: TypeAnnotation;
   loc: Location;
 };
 

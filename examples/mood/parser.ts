@@ -87,7 +87,7 @@ class Parser {
     const params = this.parseParameterList();
     this.expect(")");
     this.expect(":");
-    const returnType = this.parseTypeAnnotation();
+    const returnType = this.parseIdentifier();
     const body = this.parseBlockExpression();
     return {
       type: "FunctionDeclaration",
@@ -117,7 +117,7 @@ class Parser {
     const start = this.nextLoc();
     const name = this.parseIdentifier();
     this.expect(":");
-    const annotation = this.parseTypeAnnotation();
+    const annotation = this.parseIdentifier();
     return {
       type: "Parameter",
       name,
@@ -157,6 +157,8 @@ class Parser {
   parseExpressionImpl(): Expression {
     if (this.peekVariableDeclaration()) {
       return this.parseVariableDeclaration();
+    } else if (this.peekLiteral()) {
+      return this.parseLiteral();
     } else if (this.peek().type == "Identifier") {
       const identifier = this.parseIdentifier();
       if (this.peek().type === "::") {
@@ -166,8 +168,6 @@ class Parser {
       } else {
         return identifier;
       }
-    } else if (this.peekLiteral()) {
-      return this.parseLiteral();
     }
     throw new Error("Expected an expression, got " + this.peek().type);
   }
@@ -197,7 +197,12 @@ class Parser {
   }
 
   peekLiteral(): boolean {
-    return this.peek().type === "Number";
+    const next = this.peek();
+    return (
+      next.type === "Number" ||
+      (next.type === "Identifier" && next.value === "true") ||
+      (next.type === "Identifier" && next.value === "false")
+    );
   }
 
   // ExpressionPath ::= Identifier "::" Identifier
@@ -222,7 +227,7 @@ class Parser {
     this.expect("let");
     const name = this.parseIdentifier();
     this.expect(":");
-    const annotation = this.parseTypeAnnotation();
+    const annotation = this.parseIdentifier();
     this.expect("=");
     const value = this.parseExpression();
     return {
@@ -236,15 +241,37 @@ class Parser {
 
   parseLiteral(): Literal {
     const start = this.nextLoc();
-    const value = this.parseNumber();
-    this.expect("_");
-    const annotation = this.parseNumericType();
-    return {
-      type: "Literal",
-      value,
-      annotation,
-      loc: this.locToPrev(start),
-    };
+    const next = this.peek();
+    if (next.type === "Number") {
+      const value = this.parseNumber();
+      this.expect("_");
+      const annotation = this.parseNumericType();
+      return {
+        type: "Literal",
+        value,
+        annotation,
+        loc: this.locToPrev(start),
+      };
+    } else if (next.type === "Identifier") {
+      if (next.value === "true") {
+        this.next();
+        return {
+          type: "Literal",
+          value: true,
+          annotation: { type: "Identifier", name: "bool", loc: next.loc },
+          loc: this.locToPrev(start),
+        };
+      } else if (next.value === "false") {
+        this.next();
+        return {
+          type: "Literal",
+          value: false,
+          annotation: { type: "Identifier", name: "bool", loc: next.loc },
+          loc: this.locToPrev(start),
+        };
+      }
+    }
+    throw new Error(`Expected a literal, got "${next.type}"`);
   }
 
   parseNumber(): number {
@@ -257,17 +284,18 @@ class Parser {
     return parseFloat(digits.value);
   }
 
-  parseNumericType(): NumericType {
+  parseNumericType(): Identifier {
     const id = this.parseIdentifier();
     switch (id.name) {
       case "i32":
       case "f64":
-        return {
-          type: "PrimitiveType",
-          name: id.name,
-        };
+        return id;
+      default:
+        throw new DiagnosticError(
+          "Expected a numeric type",
+          annotate(id.loc, ""),
+        );
     }
-    throw new DiagnosticError("Expected a numeric type", annotate(id.loc, ""));
   }
 
   // BinaryExpression ::= Expression Operator Expression
@@ -295,20 +323,6 @@ class Parser {
       "Expected an operator",
       annotate(token.loc, `Found ${token.type}`),
     );
-  }
-
-  // TypeAnnotation ::= Identifier | PrimitiveType
-  parseTypeAnnotation(): TypeAnnotation {
-    const id = this.parseIdentifier();
-    switch (id.name) {
-      case "i32":
-      case "f64":
-        return {
-          type: "PrimitiveType",
-          name: id.name,
-        };
-    }
-    return id;
   }
 
   peekEnumDeclaration(): boolean {

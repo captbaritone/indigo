@@ -3,7 +3,11 @@ import { NumType } from "../../types";
 import { AstNode, TypeAnnotation } from "./ast";
 import * as Parser from "./Parser";
 import { typeCheck } from "./TypeChecker";
-import { Result, catchToResult, annotate } from "./DiagnosticError";
+import DiagnosticError, {
+  Result,
+  catchToResult,
+  annotate,
+} from "./DiagnosticError";
 import SymbolTable from "./SymbolTable";
 
 export default function compile(source: string): Result<Uint8Array> {
@@ -41,12 +45,12 @@ export class Compiler {
         const name = ast.id.name;
         const params = {};
         for (const param of ast.params) {
-          params[param.name.name] = typeFromAnnotation(param.annotation);
+          params[param.name.name] = typeFromAnnotation(param.annotation, scope);
         }
         this.ctx.declareFunction({
           name,
           params,
-          results: [typeFromAnnotation(ast.returnType)],
+          results: [typeFromAnnotation(ast.returnType, scope)],
           export: ast.public,
         });
 
@@ -111,7 +115,7 @@ export class Compiler {
         break;
       }
       case "VariableDeclaration": {
-        const type = typeFromAnnotation(ast.annotation);
+        const type = typeFromAnnotation(ast.annotation, scope);
         this.exp.defineLocal(ast.name.name, type);
         this.emit(ast.value, scope);
         this.exp.localTee(ast.name.name);
@@ -122,28 +126,32 @@ export class Compiler {
         break;
       }
       case "Literal": {
-        if (typeof ast.value !== "number") {
-          throw new Error(`Unknown literal: ${ast.value}`);
+        const type = typeFromAnnotation(ast.annotation, scope);
+        if (typeof ast.value === "boolean") {
+          this.exp.i32Const(ast.value ? 1 : 0);
+        } else if (typeof ast.value === "number") {
+          const value = Number(ast.value);
+          switch (type) {
+            case NumType.F32:
+              this.exp.f32Const(value);
+              break;
+            case NumType.F64:
+              this.exp.f64Const(value);
+              break;
+            case NumType.I32:
+              this.exp.i32Const(value);
+              break;
+            case NumType.I64:
+              this.exp.i64Const(value);
+            default:
+              throw new Error(
+                `Unknown primitive literal name: ${ast.annotation.name}`,
+              );
+          }
+        } else {
+          throw new Error(`Unknown primitive literal: ${typeof ast.value}`);
         }
-        const type = typeFromAnnotation(ast.annotation);
 
-        switch (type) {
-          case NumType.F32:
-            this.exp.f32Const(ast.value);
-            break;
-          case NumType.F64:
-            this.exp.f64Const(ast.value);
-            break;
-          case NumType.I32:
-            this.exp.i32Const(ast.value);
-            break;
-          case NumType.I64:
-            this.exp.i64Const(ast.value);
-          default:
-            throw new Error(
-              `Unknown primitive literal name: ${ast.annotation.name}`,
-            );
-        }
         break;
       }
       case "IfStatement": {
@@ -163,22 +171,29 @@ export class Compiler {
   }
 }
 
-function typeFromAnnotation(annotation: TypeAnnotation): NumType {
-  switch (annotation.type) {
-    case "PrimitiveType":
-      switch (annotation.name) {
-        case "f64":
-          return NumType.F64;
-        case "i32":
-          return NumType.I32;
-        default:
-          throw new Error(`Unknown type ${annotation}`);
-      }
-    case "Identifier":
-      // TODO: Support user-defined types
+function typeFromAnnotation(
+  annotation: TypeAnnotation,
+  scope: SymbolTable,
+): NumType {
+  const type = scope.lookup(annotation.name);
+  if (type == null) {
+    throw new DiagnosticError(
+      `Unknown type "${annotation.name}".`,
+      annotate(annotation.loc, "error"),
+    );
+  }
+
+  switch (type.type) {
+    case "f64":
+      return NumType.F64;
+    case "i32":
       return NumType.I32;
+    case "bool":
+      return NumType.I32;
+    case "enum":
+      return NumType.I32;
+
     default:
-      // @ts-ignore
-      throw new Error(`Unknown TypeAnnotation ${annotation.type}`);
+      throw new Error(`Unknown type ${type.type}`);
   }
 }

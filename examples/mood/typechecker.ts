@@ -9,6 +9,11 @@ import SymbolTable, { SymbolType } from "./SymbolTable";
 export function typeCheck(ast: AstNode): SymbolTable {
   const checker = new TypeChecker();
   const scope = new SymbolTable();
+  scope.define("bool", { type: "bool" });
+  scope.define("true", { type: "bool" });
+  scope.define("false", { type: "bool" });
+  scope.define("i32", { type: "i32" });
+  scope.define("f64", { type: "f64" });
   checker.tc(ast, scope);
   return scope;
 }
@@ -152,6 +157,9 @@ class TypeChecker {
         return type;
       }
       case "Literal": {
+        if (typeof node.value === "boolean") {
+          return { type: "bool" };
+        }
         return this.fromAnnotation(node.annotation, scope);
       }
       case "VariableDeclaration": {
@@ -199,28 +207,13 @@ class TypeChecker {
   }
 
   fromAnnotation(annotation: TypeAnnotation, scope: SymbolTable): SymbolType {
-    switch (annotation.type) {
-      case "PrimitiveType":
-        switch (annotation.name) {
-          case "f64":
-            return { type: "f64" };
-          case "i32":
-            return { type: "i32" };
-          default:
-            throw new Error(`Unknown type ${annotation}`);
-        }
-      case "Identifier":
-        const found = scope.lookup(annotation.name);
-        if (found == null) {
-          throw new DiagnosticError(
-            "Unknown type: " + annotation.name,
-            annotate(annotation.loc, "This type is not defined."),
-          );
-        }
-        return found;
-      default:
-        // @ts-ignore
-        throw new Error(`Unknown TypeAnnotation ${annotation.type}`);
+    const found = scope.lookup(annotation.name);
+    if (found == null) {
+      throw new DiagnosticError(
+        "Unknown type: " + annotation.name,
+        annotate(annotation.loc, "This type is not defined."),
+      );
     }
+    return found;
   }
 }

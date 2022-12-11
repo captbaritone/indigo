@@ -1,5 +1,8 @@
 export type SymbolType =
   | {
+      type: "bool";
+    }
+  | {
       type: "nil";
     }
   | {
