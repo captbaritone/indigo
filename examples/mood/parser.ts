@@ -1,24 +1,21 @@
 import {
   AstNode,
   Declaration,
-  Location,
   Program,
   EnumDeclaration,
   Identifier,
   Variant,
   FunctionDeclaration,
   BlockExpression,
-  TypeAnnotation,
   Parameter,
   Expression,
   BinaryExpression,
   Literal,
-  NumericType,
   VariableDeclaration,
   ExpressionPath,
   CallExpression,
-  union,
 } from "./ast";
+import { Location, union } from "./Location";
 import DiagnosticError, { annotate } from "./DiagnosticError";
 import { Token, lex, IdentifierToken, NumberToken } from "./lexer";
 

@@ -1,4 +1,5 @@
-import { AstNode, lastChar, TypeAnnotation, union } from "./ast";
+import { AstNode, TypeAnnotation } from "./ast";
+import { lastChar, union } from "./Location";
 import DiagnosticError, { annotate } from "./DiagnosticError";
 import SymbolTable, { SymbolType } from "./SymbolTable";
 

@@ -1,3 +1,5 @@
+import { Location } from "./Location";
+
 export type AstNode = Program | Declaration | Expression;
 export type Expression =
   | Identifier
@@ -8,28 +10,6 @@ export type Expression =
   | ExpressionPath
   | BlockExpression
   | VariableDeclaration;
-
-export type Position = { offset: number; line: number; column: number };
-
-export type Location = {
-  start: Position;
-  end: Position;
-};
-
-export function lastChar(location: Location): Location {
-  return {
-    start: {
-      offset: location.end.offset - 1,
-      line: location.end.line,
-      column: location.end.column - 1,
-    },
-    end: location.end,
-  };
-}
-
-export function union(start: Location, end: Location): Location {
-  return { start: start.start, end: end.end };
-}
 
 export type Program = {
   type: "Program";

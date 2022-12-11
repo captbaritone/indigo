@@ -1,4 +1,4 @@
-import { Location } from "./ast";
+import { Location } from "./Location";
 
 export type Result<T> =
   | {
