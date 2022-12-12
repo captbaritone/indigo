@@ -9,11 +9,12 @@ import TypeTable from "./TypeTable";
  * detected.
  */
 export function typeCheck(ast: AstNode): TypeTable {
-  const checker = new TypeChecker();
+  const typeTable = new TypeTable();
+  const checker = new TypeChecker(typeTable);
   const scope = new SymbolTable();
   addBuiltinTypes(scope);
   checker.tc(ast, scope);
-  return checker._typeTable;
+  return typeTable;
 }
 
 function addBuiltinTypes(scope: SymbolTable): void {
@@ -25,7 +26,11 @@ function addBuiltinTypes(scope: SymbolTable): void {
 }
 
 class TypeChecker {
-  _typeTable: TypeTable = new TypeTable();
+  _typeTable: TypeTable;
+  constructor(typeTable: TypeTable) {
+    this._typeTable = typeTable;
+  }
+
   tc(node: AstNode, scope: SymbolTable): SymbolType {
     switch (node.type) {
       case "Program": {
@@ -218,7 +223,7 @@ class TypeChecker {
   }
 
   typeAstNode(typeId: number, type: SymbolType): SymbolType {
-    return this._typeTable.typeAstNode(typeId, type);
+    return this._typeTable.define(typeId, type);
   }
 
   expectType(node: AstNode, type: SymbolType, scope: SymbolTable): SymbolType {

@@ -14,11 +14,11 @@ export function emit(ctx: ModuleContext, ast: AstNode, typeTable: TypeTable) {
 
 export class WasmEmitter {
   ctx: ModuleContext;
-  typeTable: TypeTable;
   exp: ExpressionContext;
+  _typeTable: TypeTable;
   constructor(ctx: ModuleContext, typeTable: TypeTable) {
     this.ctx = ctx;
-    this.typeTable = typeTable;
+    this._typeTable = typeTable;
   }
 
   emit(ast: AstNode) {
@@ -33,18 +33,12 @@ export class WasmEmitter {
         const name = ast.id.name;
         const params = {};
         for (const param of ast.params) {
-          params[param.name.name] = numTypeFromType(
-            this.typeTable.lookupAstNode(param.typeId),
-          );
+          params[param.name.name] = this.lookupAstNodeNumType(param.typeId);
         }
         this.ctx.declareFunction({
           name,
           params,
-          results: [
-            numTypeFromType(
-              this.typeTable.lookupAstNode(ast.returnType.typeId),
-            ),
-          ],
+          results: [this.lookupAstNodeNumType(ast.returnType.typeId)],
           export: ast.public,
         });
 
@@ -83,7 +77,7 @@ export class WasmEmitter {
             this.exp.f64Mul();
             break;
           case "==":
-            switch (this.typeTable.lookupAstNode(ast.left.typeId).type) {
+            switch (this.lookupAstNode(ast.left.typeId).type) {
               case "i32":
               case "bool":
               case "enum":
@@ -111,7 +105,7 @@ export class WasmEmitter {
         break;
       }
       case "ExpressionPath": {
-        const enumSymbol = this.typeTable.lookupAstNode(ast.typeId);
+        const enumSymbol = this.lookupAstNode(ast.typeId);
         if (enumSymbol.type !== "enum") {
           throw new Error("Expected enum type");
         }
@@ -127,8 +121,8 @@ export class WasmEmitter {
         break;
       }
       case "VariableDeclaration": {
-        const type = this.typeTable.lookupAstNode(ast.typeId);
-        this.exp.defineLocal(ast.name.name, numTypeFromType(type));
+        const type = this.lookupAstNodeNumType(ast.typeId);
+        this.exp.defineLocal(ast.name.name, type);
         this.emit(ast.value);
         this.exp.localTee(ast.name.name);
         break;
@@ -138,7 +132,7 @@ export class WasmEmitter {
         break;
       }
       case "Literal": {
-        const type = numTypeFromType(this.typeTable.lookupAstNode(ast.typeId));
+        const type = this.lookupAstNodeNumType(ast.typeId);
         if (typeof ast.value === "boolean") {
           this.exp.i32Const(ast.value ? 1 : 0);
         } else if (typeof ast.value === "number") {
@@ -181,20 +175,23 @@ export class WasmEmitter {
         throw new Error(`Unknown node type: ${ast.type}`);
     }
   }
-}
+  lookupAstNode(id: number): SymbolType {
+    return this._typeTable.lookup(id);
+  }
+  lookupAstNodeNumType(id: number): NumType {
+    const type = this.lookupAstNode(id);
+    switch (type.type) {
+      case "f64":
+        return NumType.F64;
+      case "i32":
+        return NumType.I32;
+      case "bool":
+        return NumType.I32;
+      case "enum":
+        return NumType.I32;
 
-function numTypeFromType(type: SymbolType): NumType {
-  switch (type.type) {
-    case "f64":
-      return NumType.F64;
-    case "i32":
-      return NumType.I32;
-    case "bool":
-      return NumType.I32;
-    case "enum":
-      return NumType.I32;
-
-    default:
-      throw new Error(`Unknown type ${type.type}`);
+      default:
+        throw new Error(`Unknown type ${type.type}`);
+    }
   }
 }

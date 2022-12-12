@@ -14,11 +14,11 @@ import { SymbolType } from "./SymbolTable";
 export default class TypeTable {
   _astNodes: SymbolType[] = [];
 
-  typeAstNode(typeId: number, type: SymbolType): SymbolType {
+  define(typeId: number, type: SymbolType): SymbolType {
     this._astNodes[typeId] = type;
     return type;
   }
-  lookupAstNode(typeId: number): SymbolType {
+  lookup(typeId: number): SymbolType {
     const type = this._astNodes[typeId];
     if (type == null) {
       throw new Error(`No type for AST node ${typeId}`);
