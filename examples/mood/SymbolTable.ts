@@ -29,9 +29,17 @@ type EnumSymbol = {
   variants: { name: string; valueType: SymbolType | null }[];
 };
 
+/**
+ * A symbol table is a mapping from names to types. It models the scopes of Mood
+ * by having an optional parent scope. If a type is not found in the current
+ * scope, it will be looked up in the parent scope(s).
+ *
+ * This allows variable shadowing where a variable in a child scope, such as a
+ * function body, can have the same name as a different variable in the parent
+ * scope.
+ */
 export default class SymbolTable {
   _variables: Map<string, SymbolType> = new Map();
-  _astNodes: Map<number, SymbolType> = new Map();
   _parent: SymbolTable | null = null;
 
   constructor(parent: SymbolTable | null = null) {
@@ -53,25 +61,7 @@ export default class SymbolTable {
     return null;
   }
 
-  lookupFunction(name: string): FunctionSymbol {
-    return this.lookup(name) as FunctionSymbol;
-  }
-  lookupEnum(name: string): EnumSymbol {
-    return this.lookup(name) as EnumSymbol;
-  }
-
   child(): SymbolTable {
     return new SymbolTable(this);
-  }
-  typeAstNode(typeId: number, type: SymbolType): SymbolType {
-    this._astNodes.set(typeId, type);
-    return type;
-  }
-  lookupAstNode(typeId: number): SymbolType {
-    const type = this._astNodes.get(typeId);
-    if (type == null) {
-      throw new Error(`No type for AST node ${typeId}`);
-    }
-    return type;
   }
 }
