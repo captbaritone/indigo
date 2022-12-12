@@ -29,6 +29,7 @@ export function parse(code: string): AstNode {
 class Parser {
   _tokens: Token[];
   _nextIndex: number;
+  _nextTypeId: number = 0;
   constructor(tokens: Token[]) {
     this._tokens = tokens;
     this._nextIndex = 0;
@@ -139,6 +140,7 @@ class Parser {
       type: "BlockExpression",
       expressions,
       loc: this.locToPrev(start),
+      typeId: this.nextTypeId(),
     };
   }
 
@@ -188,6 +190,7 @@ class Parser {
       callee: callee,
       args,
       loc: union(callee.loc, this.prevLoc()),
+      typeId: this.nextTypeId(),
     };
   }
 
@@ -222,6 +225,7 @@ class Parser {
       head,
       tail,
       loc: union(head.loc, tail.loc),
+      typeId: this.nextTypeId(),
     };
   }
 
@@ -244,6 +248,7 @@ class Parser {
       value,
       annotation,
       loc: this.locToPrev(start),
+      typeId: this.nextTypeId(),
     };
   }
 
@@ -259,23 +264,32 @@ class Parser {
         value,
         annotation,
         loc: this.locToPrev(start),
+        typeId: this.nextTypeId(),
       };
     } else if (next.type === "Identifier") {
+      const annotation = {
+        type: "Identifier",
+        name: "bool",
+        loc: next.loc,
+        typeId: this.nextTypeId(),
+      } as const;
       if (next.value === "true") {
         this.next();
         return {
           type: "Literal",
           value: true,
-          annotation: { type: "Identifier", name: "bool", loc: next.loc },
+          annotation,
           loc: this.locToPrev(start),
+          typeId: this.nextTypeId(),
         };
       } else if (next.value === "false") {
         this.next();
         return {
           type: "Literal",
           value: false,
-          annotation: { type: "Identifier", name: "bool", loc: next.loc },
+          annotation,
           loc: this.locToPrev(start),
+          typeId: this.nextTypeId(),
         };
       }
     }
@@ -317,6 +331,7 @@ class Parser {
       operator,
       right,
       loc: union(left.loc, right.loc),
+      typeId: this.nextTypeId(),
     };
   }
 
@@ -383,6 +398,7 @@ class Parser {
       type: "Identifier",
       name: token.value,
       loc: token.loc,
+      typeId: this.nextTypeId(),
     };
   }
 
@@ -417,5 +433,9 @@ class Parser {
 
   locToPrev(start: Location): Location {
     return union(start, this.prevLoc());
+  }
+
+  nextTypeId() {
+    return this._nextTypeId++;
   }
 }

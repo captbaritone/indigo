@@ -33,6 +33,7 @@ export type BlockExpression = {
   type: "BlockExpression";
   expressions: Expression[];
   loc: Location;
+  typeId: number;
 };
 
 export type EnumDeclaration = {
@@ -66,6 +67,7 @@ export type VariableDeclaration = {
   value: Expression;
   annotation: TypeAnnotation;
   loc: Location;
+  typeId: number;
 };
 
 export type TypeAnnotation = Identifier;
@@ -74,6 +76,7 @@ export type Identifier = {
   type: "Identifier";
   name: string;
   loc: Location;
+  typeId: number;
 };
 
 export type Literal = {
@@ -81,6 +84,7 @@ export type Literal = {
   value: any;
   annotation: TypeAnnotation;
   loc: Location;
+  typeId: number;
 };
 
 export type CallExpression = {
@@ -88,6 +92,7 @@ export type CallExpression = {
   callee: Identifier;
   args: Expression[];
   loc: Location;
+  typeId: number;
 };
 
 export type ExpressionPath = {
@@ -95,6 +100,7 @@ export type ExpressionPath = {
   head: Identifier;
   tail: Identifier;
   loc: Location;
+  typeId: number;
 };
 
 export type BinaryExpression = {
@@ -103,6 +109,7 @@ export type BinaryExpression = {
   right: Expression;
   operator: "+" | "*" | "==";
   loc: Location;
+  typeId: number;
 };
 
 export type IfStatement = {
@@ -111,4 +118,5 @@ export type IfStatement = {
   consequent: Expression;
   alternate: Expression | null;
   loc: Location;
+  typeId: number;
 };

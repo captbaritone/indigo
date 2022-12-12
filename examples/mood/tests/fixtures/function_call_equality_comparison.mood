@@ -1,0 +1,6 @@
+fn num(): i32 {
+  10_i32
+}
+pub fn test(): bool {
+  num() == num()
+}

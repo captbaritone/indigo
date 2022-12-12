@@ -31,6 +31,7 @@ type EnumSymbol = {
 
 export default class SymbolTable {
   _variables: Map<string, SymbolType> = new Map();
+  _astNodes: Map<number, SymbolType> = new Map();
   _parent: SymbolTable | null = null;
 
   constructor(parent: SymbolTable | null = null) {
@@ -61,5 +62,16 @@ export default class SymbolTable {
 
   child(): SymbolTable {
     return new SymbolTable(this);
+  }
+  typeAstNode(typeId: number, type: SymbolType): SymbolType {
+    this._astNodes.set(typeId, type);
+    return type;
+  }
+  lookupAstNode(typeId: number): SymbolType {
+    const type = this._astNodes.get(typeId);
+    if (type == null) {
+      throw new Error(`No type for AST node ${typeId}`);
+    }
+    return type;
   }
 }

@@ -34,14 +34,39 @@ class TypeChecker {
         return lastType;
       }
       case "BinaryExpression": {
-        const leftType = this.expectNumeric(node.left, scope);
-        this.expectType(node.right, leftType, scope);
+        const leftType = this.tc(node.left, scope);
         switch (node.operator) {
           case "*":
-          case "+":
-            return leftType;
-          case "==":
-            return { type: "bool" };
+          case "+": {
+            if (!(leftType.type === "f64" || leftType.type === "i32")) {
+              throw new DiagnosticError(
+                `Expected a number.`,
+                annotate(node.left.loc, "This expression is not numeric."),
+              );
+            }
+            this.expectType(node.right, leftType, scope);
+            return scope.typeAstNode(node.typeId, leftType);
+          }
+          case "==": {
+            if (
+              !(
+                leftType.type === "f64" ||
+                leftType.type === "i32" ||
+                leftType.type === "bool" ||
+                leftType.type === "enum"
+              )
+            ) {
+              throw new DiagnosticError(
+                `Expected a number or boolean.`,
+                annotate(
+                  node.left.loc,
+                  "This expression is not numeric or boolean.",
+                ),
+              );
+            }
+            this.expectType(node.right, leftType, scope);
+            return scope.typeAstNode(node.typeId, { type: "bool" });
+          }
         }
       }
       case "FunctionDeclaration": {
@@ -82,7 +107,6 @@ class TypeChecker {
         });
         // A declaration has no type itself.
         return { type: "empty" };
-        break;
       }
       case "Identifier": {
         const type = scope.lookup(node.name);
@@ -92,7 +116,7 @@ class TypeChecker {
             annotate(node.loc, "This variable is not defined."),
           );
         }
-        return type;
+        return scope.typeAstNode(node.typeId, type);
       }
       case "CallExpression": {
         const func = scope.lookup(node.callee.name);
@@ -122,7 +146,6 @@ class TypeChecker {
           );
         }
         if (node.args.length > func.params.length) {
-          const excessCount = node.args.length - func.params.length;
           const excess = node.args.slice(func.params.length);
           const firstLoc = excess[0].loc;
           const lastLoc = excess[excess.length - 1].loc;
@@ -138,7 +161,7 @@ class TypeChecker {
         for (const [i, arg] of node.args.entries()) {
           this.expectType(arg, func.params[i], scope);
         }
-        return func.result;
+        return scope.typeAstNode(node.typeId, func.result);
       }
       case "ExpressionPath": {
         const type = scope.lookup(node.head.name);
@@ -166,13 +189,15 @@ class TypeChecker {
             ),
           );
         }
-        return type;
+        return scope.typeAstNode(node.typeId, type);
       }
       case "Literal": {
-        if (typeof node.value === "boolean") {
-          return { type: "bool" };
-        }
-        return this.fromAnnotation(node.annotation, scope);
+        const type =
+          typeof node.value === "boolean"
+            ? ({ type: "bool" } as const)
+            : this.fromAnnotation(node.annotation, scope);
+
+        return scope.typeAstNode(node.typeId, type);
       }
       case "VariableDeclaration": {
         const type = this.fromAnnotation(node.annotation, scope);
@@ -207,7 +232,7 @@ class TypeChecker {
     return actual;
   }
 
-  expectNumeric(node: AstNode, scope: SymbolTable): SymbolType {
+  _expectNumeric(node: AstNode, scope: SymbolTable): SymbolType {
     const type = this.tc(node, scope);
     if (!(type.type === "f64" || type.type === "i32")) {
       throw new DiagnosticError(

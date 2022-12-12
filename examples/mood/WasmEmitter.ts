@@ -76,15 +76,20 @@ export class WasmEmitter {
             this.exp.f64Mul();
             break;
           case "==":
-            if (
-              ast.left.type !== "Literal" ||
-              ast.left.annotation.name !== "i32"
-            ) {
-              // The problem is that here we need the type system to tell us the
-              // type of each expression.
-              throw new Error("TODO: Support == for non-integer literals");
+            switch (scope.lookupAstNode(ast.left.typeId).type) {
+              case "i32":
+              case "bool":
+              case "enum":
+                this.exp.i32Eq();
+                break;
+              case "f64":
+                this.exp.f64Eq();
+                break;
+              default:
+                throw new Error(
+                  `Equality comparison is not supported for the type: ${ast.left.type}`,
+                );
             }
-            this.exp.i32Eq();
             break;
           default:
             throw new Error(`Unknown operator: ${ast.operator}`);

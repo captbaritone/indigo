@@ -1,0 +1,8 @@
+enum Foo {
+  A,
+  B,
+}
+
+pub fn test(): bool {
+  Foo::A == Foo::B
+}
