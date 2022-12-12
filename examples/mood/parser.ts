@@ -19,6 +19,17 @@ import { Location, union } from "./Location";
 import DiagnosticError, { annotate } from "./DiagnosticError";
 import { Token, lex, IdentifierToken, NumberToken } from "./lexer";
 
+/**
+ * Mood uses a recursive descent Pratt parser. In essence, each node type has a
+ * parsing method (`parse<NODE_TYPE>`) as well as a "peek" method
+ * (`peek<NODE_TYPE>`) which determines whether the parser is at the start of a
+ * node of that type.
+ *
+ * Each parse method is commented with the grammar rule it implements.
+ *
+ * For more information on Pratt parsing, see:
+ * https://journal.stuffwithstuff.com/2011/03/19/pratt-parsers-expression-parsing-made-easy/
+ */
 export function parse(code: string): AstNode {
   const tokens = lex(code);
   const parser = new Parser(tokens);
@@ -167,7 +178,7 @@ class Parser {
       return this.parseVariableDeclaration();
     } else if (this.peekLiteral()) {
       return this.parseLiteral();
-    } else if (this.peek().type == "Identifier") {
+    } else if (this.peek().type === "Identifier") {
       const identifier = this.parseIdentifier();
       if (this.peek().type === "::") {
         return this.parseExpressionPath(identifier);
@@ -176,6 +187,11 @@ class Parser {
       } else {
         return identifier;
       }
+    } else if (this.peek().type === "(") {
+      this.next();
+      const exp = this.parseExpression();
+      this.expect(")");
+      return exp;
     }
     throw new DiagnosticError(
       "Expected an expression, got " + this.peek().type,

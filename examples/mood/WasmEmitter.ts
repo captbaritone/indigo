@@ -68,16 +68,38 @@ export class WasmEmitter {
       case "BinaryExpression": {
         this.emit(ast.left);
         this.emit(ast.right);
+        const leftType = this.lookupAstNode(ast.left.typeId).type;
         switch (ast.operator) {
           case "+":
-            // TODO: Check the type
-            this.exp.f64Add();
+            switch (leftType) {
+              case "i32":
+                this.exp.i32Add();
+                break;
+              case "f64":
+                this.exp.f64Add();
+                break;
+              default:
+                throw new Error(
+                  "Expected LHS of a + operation to be a numeric type",
+                );
+            }
             break;
           case "*":
-            this.exp.f64Mul();
+            switch (leftType) {
+              case "i32":
+                this.exp.i32Mul();
+                break;
+              case "f64":
+                this.exp.f64Mul();
+                break;
+              default:
+                throw new Error(
+                  "Expected LHS of a * operation to be a numeric type",
+                );
+            }
             break;
           case "==":
-            switch (this.lookupAstNode(ast.left.typeId).type) {
+            switch (leftType) {
               case "i32":
               case "bool":
               case "enum":

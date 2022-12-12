@@ -1,0 +1,4 @@
+pub fn test(): bool {
+  let a: i32 = 2_i32;
+  (a + a) == (a * a)
+}
