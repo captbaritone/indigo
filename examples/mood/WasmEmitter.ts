@@ -1,29 +1,31 @@
 import { ExpressionContext, ModuleContext } from "../..";
 import { NumType } from "../../types";
-import { AstNode, TypeAnnotation } from "./ast";
-import DiagnosticError, { annotate } from "./DiagnosticError";
-import SymbolTable from "./SymbolTable";
+import { AstNode } from "./ast";
+import { SymbolType } from "./SymbolTable";
+import TypeTable from "./TypeTable";
 
 /**
  * Populates the ModuleContext with the program defined by AstNode.
  */
-export function emit(ctx: ModuleContext, ast: AstNode, scope: SymbolTable) {
-  const emitter = new WasmEmitter(ctx);
-  emitter.emit(ast, scope);
+export function emit(ctx: ModuleContext, ast: AstNode, typeTable: TypeTable) {
+  const emitter = new WasmEmitter(ctx, typeTable);
+  emitter.emit(ast);
 }
 
 export class WasmEmitter {
   ctx: ModuleContext;
+  typeTable: TypeTable;
   exp: ExpressionContext;
-  constructor(ctx: ModuleContext) {
+  constructor(ctx: ModuleContext, typeTable: TypeTable) {
     this.ctx = ctx;
+    this.typeTable = typeTable;
   }
 
-  emit(ast: AstNode, scope: SymbolTable) {
+  emit(ast: AstNode) {
     switch (ast.type) {
       case "Program": {
         for (const func of ast.body) {
-          this.emit(func, scope);
+          this.emit(func);
         }
         break;
       }
@@ -31,19 +33,24 @@ export class WasmEmitter {
         const name = ast.id.name;
         const params = {};
         for (const param of ast.params) {
-          params[param.name.name] = typeFromAnnotation(param.annotation, scope);
+          params[param.name.name] = numTypeFromType(
+            this.typeTable.lookupAstNode(param.typeId),
+          );
         }
         this.ctx.declareFunction({
           name,
           params,
-          results: [typeFromAnnotation(ast.returnType, scope)],
+          results: [
+            numTypeFromType(
+              this.typeTable.lookupAstNode(ast.returnType.typeId),
+            ),
+          ],
           export: ast.public,
         });
 
-        const funcScope = scope.lookupFunction(name).scope;
         this.ctx.defineFunction(name, (exp) => {
           this.exp = exp;
-          this.emit(ast.body, funcScope);
+          this.emit(ast.body);
         });
         break;
       }
@@ -52,7 +59,7 @@ export class WasmEmitter {
           break;
         }
         for (let i = 0; i < ast.expressions.length; i++) {
-          this.emit(ast.expressions[i], scope);
+          this.emit(ast.expressions[i]);
           if (i < ast.expressions.length - 1) {
             this.exp.drop();
           }
@@ -65,8 +72,8 @@ export class WasmEmitter {
         break;
       }
       case "BinaryExpression": {
-        this.emit(ast.left, scope);
-        this.emit(ast.right, scope);
+        this.emit(ast.left);
+        this.emit(ast.right);
         switch (ast.operator) {
           case "+":
             // TODO: Check the type
@@ -76,7 +83,7 @@ export class WasmEmitter {
             this.exp.f64Mul();
             break;
           case "==":
-            switch (scope.lookupAstNode(ast.left.typeId).type) {
+            switch (this.typeTable.lookupAstNode(ast.left.typeId).type) {
               case "i32":
               case "bool":
               case "enum":
@@ -98,13 +105,16 @@ export class WasmEmitter {
       }
       case "CallExpression": {
         for (const arg of ast.args) {
-          this.emit(arg, scope);
+          this.emit(arg);
         }
         this.exp.call(ast.callee.name);
         break;
       }
       case "ExpressionPath": {
-        const enumSymbol = scope.lookupEnum(ast.head.name);
+        const enumSymbol = this.typeTable.lookupAstNode(ast.typeId);
+        if (enumSymbol.type !== "enum") {
+          throw new Error("Expected enum type");
+        }
         const variantIndex = enumSymbol.variants.findIndex((variant) => {
           if (variant.valueType != null) {
             throw new Error("TODO: Support enum variants with values");
@@ -117,9 +127,9 @@ export class WasmEmitter {
         break;
       }
       case "VariableDeclaration": {
-        const type = typeFromAnnotation(ast.annotation, scope);
-        this.exp.defineLocal(ast.name.name, type);
-        this.emit(ast.value, scope);
+        const type = this.typeTable.lookupAstNode(ast.typeId);
+        this.exp.defineLocal(ast.name.name, numTypeFromType(type));
+        this.emit(ast.value);
         this.exp.localTee(ast.name.name);
         break;
       }
@@ -128,7 +138,7 @@ export class WasmEmitter {
         break;
       }
       case "Literal": {
-        const type = typeFromAnnotation(ast.annotation, scope);
+        const type = numTypeFromType(this.typeTable.lookupAstNode(ast.typeId));
         if (typeof ast.value === "boolean") {
           this.exp.i32Const(ast.value ? 1 : 0);
         } else if (typeof ast.value === "number") {
@@ -157,11 +167,11 @@ export class WasmEmitter {
         break;
       }
       case "IfStatement": {
-        this.emit(ast.test, scope);
+        this.emit(ast.test);
         // Need to cast to i32 because wasm doesn't have a bool type.
         this.exp.i32TruncF64S();
         this.exp.if({ kind: "EMPTY" }, (exp) => {
-          this.emit(ast.consequent, scope);
+          this.emit(ast.consequent);
         });
         ast.alternate;
         break;
@@ -173,18 +183,7 @@ export class WasmEmitter {
   }
 }
 
-function typeFromAnnotation(
-  annotation: TypeAnnotation,
-  scope: SymbolTable,
-): NumType {
-  const type = scope.lookup(annotation.name);
-  if (type == null) {
-    throw new DiagnosticError(
-      `Unknown type "${annotation.name}".`,
-      annotate(annotation.loc, "error"),
-    );
-  }
-
+function numTypeFromType(type: SymbolType): NumType {
   switch (type.type) {
     case "f64":
       return NumType.F64;

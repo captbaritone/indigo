@@ -1,6 +1,6 @@
 import { Location } from "./Location";
 
-export type AstNode = Program | Declaration | Expression;
+export type AstNode = Program | Declaration | Expression | Parameter;
 export type Expression =
   | Identifier
   | Literal
@@ -54,6 +54,7 @@ export type Parameter = {
   name: Identifier;
   annotation: TypeAnnotation;
   loc: Location;
+  typeId: number;
 };
 
 export type NumericType = {

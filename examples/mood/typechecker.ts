@@ -2,17 +2,18 @@ import { AstNode, TypeAnnotation } from "./ast";
 import { lastChar, union } from "./Location";
 import DiagnosticError, { annotate } from "./DiagnosticError";
 import SymbolTable, { SymbolType } from "./SymbolTable";
+import TypeTable from "./TypeTable";
 
 /**
  * Type-checks the given AST and throws DiagnosticError if type errors are
  * detected.
  */
-export function typeCheck(ast: AstNode): SymbolTable {
+export function typeCheck(ast: AstNode): TypeTable {
   const checker = new TypeChecker();
   const scope = new SymbolTable();
   addBuiltinTypes(scope);
   checker.tc(ast, scope);
-  return scope;
+  return checker._typeTable;
 }
 
 function addBuiltinTypes(scope: SymbolTable): void {
@@ -24,6 +25,7 @@ function addBuiltinTypes(scope: SymbolTable): void {
 }
 
 class TypeChecker {
+  _typeTable: TypeTable = new TypeTable();
   tc(node: AstNode, scope: SymbolTable): SymbolType {
     switch (node.type) {
       case "Program": {
@@ -45,7 +47,7 @@ class TypeChecker {
               );
             }
             this.expectType(node.right, leftType, scope);
-            return scope.typeAstNode(node.typeId, leftType);
+            return this.typeAstNode(node.typeId, leftType);
           }
           case "==": {
             if (
@@ -65,7 +67,7 @@ class TypeChecker {
               );
             }
             this.expectType(node.right, leftType, scope);
-            return scope.typeAstNode(node.typeId, { type: "bool" });
+            return this.typeAstNode(node.typeId, { type: "bool" });
           }
         }
       }
@@ -73,11 +75,12 @@ class TypeChecker {
         const functionScope = scope.child();
         const params: SymbolType[] = [];
         for (const param of node.params) {
-          const paramType = this.fromAnnotation(param.annotation, scope);
+          const paramType = this.tc(param, scope);
           params.push(paramType);
           functionScope.define(param.name.name, paramType);
         }
         const result = this.fromAnnotation(node.returnType, scope);
+        this.typeAstNode(node.returnType.typeId, result);
 
         scope.define(node.id.name, {
           type: "function",
@@ -89,6 +92,10 @@ class TypeChecker {
         this.expectType(node.body, result, functionScope);
         // A declaration has no type itself.
         return { type: "empty" };
+      }
+      case "Parameter": {
+        const paramType = this.fromAnnotation(node.annotation, scope);
+        return this.typeAstNode(node.typeId, paramType);
       }
       case "BlockExpression": {
         let lastType: SymbolType = { type: "empty" };
@@ -116,7 +123,7 @@ class TypeChecker {
             annotate(node.loc, "This variable is not defined."),
           );
         }
-        return scope.typeAstNode(node.typeId, type);
+        return this.typeAstNode(node.typeId, type);
       }
       case "CallExpression": {
         const func = scope.lookup(node.callee.name);
@@ -161,7 +168,7 @@ class TypeChecker {
         for (const [i, arg] of node.args.entries()) {
           this.expectType(arg, func.params[i], scope);
         }
-        return scope.typeAstNode(node.typeId, func.result);
+        return this.typeAstNode(node.typeId, func.result);
       }
       case "ExpressionPath": {
         const type = scope.lookup(node.head.name);
@@ -189,7 +196,7 @@ class TypeChecker {
             ),
           );
         }
-        return scope.typeAstNode(node.typeId, type);
+        return this.typeAstNode(node.typeId, type);
       }
       case "Literal": {
         const type =
@@ -197,17 +204,21 @@ class TypeChecker {
             ? ({ type: "bool" } as const)
             : this.fromAnnotation(node.annotation, scope);
 
-        return scope.typeAstNode(node.typeId, type);
+        return this.typeAstNode(node.typeId, type);
       }
       case "VariableDeclaration": {
         const type = this.fromAnnotation(node.annotation, scope);
         this.expectType(node.value, type, scope);
         scope.define(node.name.name, type);
-        return type;
+        return this.typeAstNode(node.typeId, type);
       }
       default:
         throw new Error(`Unknown node type: ${node.type}`);
     }
+  }
+
+  typeAstNode(typeId: number, type: SymbolType): SymbolType {
+    return this._typeTable.typeAstNode(typeId, type);
   }
 
   expectType(node: AstNode, type: SymbolType, scope: SymbolTable): SymbolType {

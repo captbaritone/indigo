@@ -121,6 +121,7 @@ class Parser {
       name,
       annotation,
       loc: this.locToPrev(start),
+      typeId: this.nextTypeId(),
     };
   }
 
