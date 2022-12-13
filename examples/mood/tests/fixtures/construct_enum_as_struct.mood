@@ -1,0 +1,13 @@
+enum Foo {
+    A,
+    B,
+    C,
+}
+
+pub fn test(): i32 {
+  Foo {
+    bar: i32
+  };
+
+  0_i32
+}

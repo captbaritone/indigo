@@ -99,12 +99,73 @@ class TypeChecker {
         return { type: "empty" };
       }
       case "StructDeclaration": {
+        const fields: { name: string; valueType: SymbolType }[] = [];
+        for (const field of node.fields) {
+          const fieldType = this.fromAnnotation(field.annotation, scope);
+          fields.push({ name: field.id.name, valueType: fieldType });
+        }
+        scope.define(node.id.name, { type: "struct", fields });
         // A declaration has no type itself.
         return { type: "empty" };
       }
       case "Parameter": {
         const paramType = this.fromAnnotation(node.annotation, scope);
         return this.typeAstNode(node.typeId, paramType);
+      }
+      case "StructConstruction": {
+        const struct = scope.lookup(node.id.name);
+        // Undefined
+        if (struct == null) {
+          throw new DiagnosticError(
+            `Undefined struct: "${node.id.name}".`,
+            annotate(node.id.loc, "This struct is not defined."),
+          );
+        }
+        // Wrong type
+        if (struct.type !== "struct") {
+          throw new DiagnosticError(
+            `Tried to use a ${struct.type} as a struct.`,
+            annotate(
+              node.id.loc,
+              `"${node.id.name}" is a ${struct.type} not a struct.`,
+            ),
+          );
+        }
+        // Missing fields
+        const missingFields = struct.fields.filter((field) => {
+          return node.fields.some((f) => f.name.name === field.name);
+        });
+        if (missingFields.length > 0) {
+          // TODO: Handle singular/plural correctly.
+          const names = missingFields.map((f) => `"${f.name}"`).join(", ");
+          throw new DiagnosticError(
+            `Missing struct field(s): ${names}.`,
+            annotate(
+              lastChar(node.loc),
+              `"${node.id.name}" is missing the field(s) ${names}.`,
+            ),
+          );
+        }
+        // Typecheck/annotate the fields.
+        for (const field of node.fields) {
+          const fieldType = struct.fields.find(
+            (f) => f.name === field.name.name,
+          );
+          // Incorrect field names
+          if (fieldType == null) {
+            // TODO: Could recommend a field name based on edit distance.
+            throw new DiagnosticError(
+              `Undefined struct field: "${field.name.name}".`,
+              annotate(
+                field.name.loc,
+                `"${field.name.name}" is not a field of "${node.id.name}".`,
+              ),
+            );
+          }
+          this.typeAstNode(field.name.typeId, fieldType.valueType);
+          this.expectType(field.value, fieldType.valueType, scope);
+        }
+        return this.typeAstNode(node.typeId, struct);
       }
       case "BlockExpression": {
         let lastType: SymbolType = { type: "empty" };

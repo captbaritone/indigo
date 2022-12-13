@@ -1,0 +1,11 @@
+struct Foo {
+  a: i32,
+}
+
+pub fn test(): i32 {
+  Foo {
+    a: 1_i32
+  };
+
+  1_i32
+}

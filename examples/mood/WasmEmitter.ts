@@ -66,6 +66,13 @@ export class WasmEmitter {
         // checking. No need to emit anything.
         break;
       }
+      case "StructConstruction": {
+        // TODO: Implement this.
+        // Write the struct to the heap
+        // Return the pointer to the struct
+        this.exp.i32Const(0);
+        break;
+      }
       case "BinaryExpression": {
         this.emit(ast.left);
         this.emit(ast.right);

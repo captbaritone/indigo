@@ -1,0 +1,7 @@
+Error: Missing struct field(s): "a", "b".:
+ --> construct_struct_undefined_field.mood:7:40
+
+  | pub fn test(): i32 {
+7 |     Foo { a: 1_i32, b: 1_i32, c: 1_i32 };
+  |                                        ^ "Foo" is missing the field(s) "a", "b".
+  |     0_i32

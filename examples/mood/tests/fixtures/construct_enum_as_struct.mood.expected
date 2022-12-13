@@ -1,0 +1,7 @@
+Error: Tried to use a enum as a struct.:
+ --> construct_enum_as_struct.mood:8:3
+
+  | pub fn test(): i32 {
+8 |   Foo {
+  |   ^^^ "Foo" is a enum not a struct.
+  |     bar: i32

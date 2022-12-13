@@ -8,7 +8,8 @@ export type Expression =
   | CallExpression
   | ExpressionPath
   | BlockExpression
-  | VariableDeclaration;
+  | VariableDeclaration
+  | StructConstruction;
 
 export type Program = {
   type: "Program";
@@ -76,6 +77,22 @@ export type Parameter = {
 export type NumericType = {
   type: "PrimitiveType";
   name: "f64" | "i32";
+};
+
+export type StructConstruction = {
+  type: "StructConstruction";
+  id: Identifier;
+  fields: StructFieldConstruction[];
+  loc: Location;
+  typeId: number;
+};
+
+export type StructFieldConstruction = {
+  type: "StructFieldConstruction";
+  name: Identifier;
+  value: Expression;
+  loc: Location;
+  typeId: number;
 };
 
 export type VariableDeclaration = {

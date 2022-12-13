@@ -16,6 +16,8 @@ import {
   CallExpression,
   StructDeclaration,
   StructField,
+  StructConstruction,
+  StructFieldConstruction,
 } from "./ast";
 import { Location, union } from "./Location";
 import DiagnosticError, { annotate } from "./DiagnosticError";
@@ -207,7 +209,8 @@ class Parser {
   }
 
   // Expression ::= Identifier | Literal | BinaryExpression | CallExpression |
-  //                ExpressionPath | BlockExpression | VariableDeclaration
+  //                ExpressionPath | BlockExpression | VariableDeclaration |
+  //                StructConstruction
   parseExpression(bindingPower: number = MAX_BINDING_POWER): Expression {
     let exp = this.parseExpressionImpl();
     while (this.peekBinaryOperator()) {
@@ -235,7 +238,9 @@ class Parser {
       return this.parseLiteral();
     } else if (this.peek().type === "Identifier") {
       const identifier = this.parseIdentifier();
-      if (this.peek().type === "::") {
+      if (this.peek().type === "{") {
+        return this.parseStructConstruction(identifier);
+      } else if (this.peek().type === "::") {
         return this.parseExpressionPath(identifier);
       } else if (this.peek().type === "(") {
         return this.parseCallExpression(identifier);
@@ -252,6 +257,41 @@ class Parser {
       "Expected an expression, got " + this.peek().type,
       annotate(this.nextLoc(), "Found " + this.peek().type),
     );
+  }
+
+  // StructConstruction ::= Identifier "{" StructField* "}"
+  parseStructConstruction(id: Identifier): StructConstruction {
+    const fields: StructFieldConstruction[] = [];
+    this.expect("{");
+    while (this.peek().type !== "}" && this.peek().type !== "EOF") {
+      fields.push(this.parseStructFieldConstruction());
+      if (this.peek().type === ",") {
+        this.next();
+      }
+    }
+    this.expect("}");
+    return {
+      type: "StructConstruction",
+      id,
+      fields,
+      loc: this.locToPrev(id.loc),
+      typeId: this.nextTypeId(),
+    };
+  }
+
+  // StructField ::= Identifier ":" Expression
+  parseStructFieldConstruction(): StructFieldConstruction {
+    const start = this.nextLoc();
+    const name = this.parseIdentifier();
+    this.expect(":");
+    const value = this.parseExpression();
+    return {
+      type: "StructFieldConstruction",
+      name,
+      value,
+      loc: this.locToPrev(start),
+      typeId: this.nextTypeId(),
+    };
   }
 
   // CallExpression ::= Identifier "(" ExpressionList ")"

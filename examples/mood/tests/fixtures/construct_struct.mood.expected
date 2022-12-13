@@ -1,0 +1,7 @@
+Error: Missing struct field(s): "a".:
+ --> construct_struct.mood:8:3
+
+  |     a: 1_i32
+8 |   };
+  |   ^ "Foo" is missing the field(s) "a".
+  | 

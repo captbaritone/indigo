@@ -14,6 +14,7 @@ export type SymbolType =
   | {
       type: "empty";
     }
+  | StructSymbol
   | FunctionSymbol
   | EnumSymbol;
 
@@ -22,6 +23,11 @@ type FunctionSymbol = {
   params: SymbolType[];
   result: SymbolType;
   scope: SymbolTable;
+};
+
+type StructSymbol = {
+  type: "struct";
+  fields: { name: string; valueType: SymbolType }[];
 };
 
 type EnumSymbol = {
