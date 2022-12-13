@@ -19,16 +19,20 @@ import { Location, union } from "./Location";
 import DiagnosticError, { annotate } from "./DiagnosticError";
 import { Token, lex, IdentifierToken, NumberToken } from "./lexer";
 
+const MAX_BINDING_POWER = 10;
+
 /**
- * Mood uses a recursive descent Pratt parser. In essence, each node type has a
- * parsing method (`parse<NODE_TYPE>`) as well as a "peek" method
- * (`peek<NODE_TYPE>`) which determines whether the parser is at the start of a
- * node of that type.
+ * Mood uses a recursive descent parser which employs precedence climbing to
+ * resolver operator precedence.
+ *
+ * Each node type has a parsing method (`parse<NODE_TYPE>`) as well as a "peek"
+ * method (`peek<NODE_TYPE>`) which determines whether the parser is at the
+ * start of a node of that type.
  *
  * Each parse method is commented with the grammar rule it implements.
  *
- * For more information on Pratt parsing, see:
- * https://journal.stuffwithstuff.com/2011/03/19/pratt-parsers-expression-parsing-made-easy/
+ * For more information on Precedence Climbing, see:
+ * https://en.wikipedia.org/wiki/Operator-precedence_parser#Precedence_climbing_method
  */
 export function parse(code: string): AstNode {
   const tokens = lex(code);
@@ -136,7 +140,7 @@ class Parser {
     };
   }
 
-  // BlockExpression ::= "{" Expression ("," Expression)* "}"
+  // BlockExpression ::= "{" Expression (";" Expression)* ";"?"}"
   parseBlockExpression(): BlockExpression {
     const start = this.nextLoc();
     this.expect("{");
@@ -156,11 +160,16 @@ class Parser {
     };
   }
 
-  // Expression ::= Identifier | Literal | BlockExpression
-  parseExpression(): Expression {
-    const exp = this.parseExpressionImpl();
-    if (this.peekBinaryOperator()) {
-      return this.parseBinaryExpression(exp);
+  // Expression ::= Identifier | Literal | BinaryExpression | CallExpression |
+  //                ExpressionPath | BlockExpression | VariableDeclaration
+  parseExpression(bindingPower: number = MAX_BINDING_POWER): Expression {
+    let exp = this.parseExpressionImpl();
+    while (this.peekBinaryOperator()) {
+      const operatorBindingPower = getOperatorBindingPower(this.peek().type);
+      if (bindingPower < operatorBindingPower) {
+        break;
+      }
+      exp = this.parseBinaryExpression(exp, operatorBindingPower);
     }
     return exp;
   }
@@ -338,9 +347,12 @@ class Parser {
   }
 
   // BinaryExpression ::= Expression Operator Expression
-  parseBinaryExpression(left: Expression): BinaryExpression {
+  parseBinaryExpression(
+    left: Expression,
+    bindingPower: number,
+  ): BinaryExpression {
     const operator = this.parseOperator();
-    const right = this.parseExpression();
+    const right = this.parseExpression(bindingPower);
 
     return {
       type: "BinaryExpression",
@@ -454,5 +466,18 @@ class Parser {
 
   nextTypeId() {
     return this._nextTypeId++;
+  }
+}
+
+function getOperatorBindingPower(op: string): number {
+  switch (op) {
+    case "+":
+      return 0;
+    case "*":
+      return 1;
+    case "==":
+      return 2;
+    default:
+      throw new Error(`Unknown operator ${op}`);
   }
 }

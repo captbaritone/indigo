@@ -4,7 +4,6 @@ export type AstNode = Program | Declaration | Expression | Parameter;
 export type Expression =
   | Identifier
   | Literal
-  | IfStatement
   | BinaryExpression
   | CallExpression
   | ExpressionPath
@@ -109,15 +108,6 @@ export type BinaryExpression = {
   left: Expression;
   right: Expression;
   operator: "+" | "*" | "==";
-  loc: Location;
-  typeId: number;
-};
-
-export type IfStatement = {
-  type: "IfStatement";
-  test: Expression;
-  consequent: Expression;
-  alternate: Expression | null;
   loc: Location;
   typeId: number;
 };

@@ -76,16 +76,6 @@ class Compiler {
         this.exp.f64Const(ast.value);
         break;
       }
-      case "IfStatement": {
-        this.emit(ast.test);
-        // Need to cast to i32 because wasm doesn't have a bool type.
-        this.exp.i32TruncF64S();
-        this.exp.if({ kind: "EMPTY" }, (exp) => {
-          this.emit(ast.consequent);
-        });
-        ast.alternate;
-        break;
-      }
       case "BlockStatement": {
         for (const statement of ast.body) {
           this.emit(statement);
