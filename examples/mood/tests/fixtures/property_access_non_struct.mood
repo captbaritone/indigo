@@ -1,0 +1,4 @@
+pub fn test(): i32 {
+    let b: i32 = 10_i32;
+    b.prop
+}

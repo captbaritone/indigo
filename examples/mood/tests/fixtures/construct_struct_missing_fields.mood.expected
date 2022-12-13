@@ -1,7 +1,7 @@
-Error: Missing struct field(s): "a".:
+Error: Missing struct field(s): "b", "c".:
  --> construct_struct_missing_fields.mood:8:20
 
   | pub fn test(): i32 {
 8 |     Foo { a: 1_i32 };
-  |                    ^ "Foo" is missing the field(s) "a".
+  |                    ^ "Foo" is missing the field(s) "b", "c".
   |     0_i32

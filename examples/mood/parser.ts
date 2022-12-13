@@ -18,6 +18,7 @@ import {
   StructField,
   StructConstruction,
   StructFieldConstruction,
+  MemberExpression,
 } from "./ast";
 import { Location, union } from "./Location";
 import DiagnosticError, { annotate } from "./DiagnosticError";
@@ -210,7 +211,7 @@ class Parser {
 
   // Expression ::= Identifier | Literal | BinaryExpression | CallExpression |
   //                ExpressionPath | BlockExpression | VariableDeclaration |
-  //                StructConstruction
+  //                StructConstruction | MemberExpression
   parseExpression(bindingPower: number = MAX_BINDING_POWER): Expression {
     let exp = this.parseExpressionImpl();
     while (this.peekBinaryOperator()) {
@@ -240,6 +241,8 @@ class Parser {
       const identifier = this.parseIdentifier();
       if (this.peek().type === "{") {
         return this.parseStructConstruction(identifier);
+      } else if (this.peek().type === ".") {
+        return this.parseMemberExpression(identifier);
       } else if (this.peek().type === "::") {
         return this.parseExpressionPath(identifier);
       } else if (this.peek().type === "(") {
@@ -334,6 +337,18 @@ class Parser {
     const tail = this.parseIdentifier();
     return {
       type: "ExpressionPath",
+      head,
+      tail,
+      loc: union(head.loc, tail.loc),
+      typeId: this.nextTypeId(),
+    };
+  }
+
+  parseMemberExpression(head: Identifier): MemberExpression {
+    this.expect(".");
+    const tail = this.parseIdentifier();
+    return {
+      type: "MemberExpression",
       head,
       tail,
       loc: union(head.loc, tail.loc),

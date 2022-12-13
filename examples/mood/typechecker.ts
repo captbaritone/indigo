@@ -8,6 +8,7 @@ import {
   FunctionDeclaration,
   Identifier,
   Literal,
+  MemberExpression,
   Program,
   StructConstruction,
   StructDeclaration,
@@ -88,10 +89,34 @@ class TypeChecker {
       case "VariableDeclaration": {
         return this.tcVariableDeclaration(node, scope);
       }
+      case "MemberExpression": {
+        return this.tcMemberExpression(node, scope);
+      }
       default:
         // @ts-ignore
         throw new Error(`Unknown node type: ${node.type}`);
     }
+  }
+
+  private tcMemberExpression(
+    node: MemberExpression,
+    scope: SymbolTable,
+  ): SymbolType {
+    const head = this.tc(node.head, scope);
+    if (head.type !== "struct") {
+      throw new DiagnosticError(
+        `Cannot access member of non-struct type.`,
+        annotate(node.head.loc, `Type is ${head.type}`),
+      );
+    }
+    const tail = head.fields.find((f) => f.name === node.tail.name);
+    if (tail == null) {
+      throw new DiagnosticError(
+        `Struct "${head.name}" does not have a field named "${node.tail.name}".`,
+        annotate(node.tail.loc, `Type is ${head.type}`),
+      );
+    }
+    return this.typeAstNode(node.typeId, tail.valueType);
   }
 
   private tcVariableDeclaration(node: VariableDeclaration, scope: SymbolTable) {
@@ -202,6 +227,7 @@ class TypeChecker {
   ): SymbolType {
     scope.define(node.id.name, {
       type: "enum",
+      name: node.id.name,
       variants: node.variants.map((variant) => ({
         name: variant.id.name,
         valueType: null,
@@ -246,7 +272,7 @@ class TypeChecker {
     }
     // Missing fields
     const missingFields = struct.fields.filter((field) => {
-      return node.fields.some((f) => f.name.name === field.name);
+      return !node.fields.some((f) => f.name.name === field.name);
     });
     if (missingFields.length > 0) {
       // TODO: Handle singular/plural correctly.
@@ -288,7 +314,7 @@ class TypeChecker {
       const fieldType = this.fromAnnotation(field.annotation, scope);
       fields.push({ name: field.id.name, valueType: fieldType });
     }
-    scope.define(node.id.name, { type: "struct", fields });
+    scope.define(node.id.name, { type: "struct", name: node.id.name, fields });
     // A declaration has no type itself.
     return { type: "empty" };
   }

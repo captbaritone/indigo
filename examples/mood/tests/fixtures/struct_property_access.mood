@@ -1,0 +1,12 @@
+struct Box {
+  width: i32,
+  height: i32, 
+}
+
+fn area(box: Box): i32 {
+  box.width * box.height
+}
+
+pub fn test(): i32 {
+  area(Box { width: 10_i32, height: 20_i32 });
+}

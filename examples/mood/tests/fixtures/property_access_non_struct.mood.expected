@@ -1,0 +1,7 @@
+Error: Cannot access member of non-struct type.:
+ --> property_access_non_struct.mood:3:5
+
+  |     let b: i32 = 10_i32;
+3 |     b.prop
+  |     ^ Type is i32
+  | }

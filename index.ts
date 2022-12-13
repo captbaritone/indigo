@@ -10,6 +10,8 @@ import {
   GlobalType,
   Global,
   BlockType,
+  MemType,
+  Limits,
 } from "./types";
 import * as Encoding from "./encoding";
 
@@ -38,6 +40,7 @@ export class ModuleContext {
   _functionNames: { [name: string]: number } = {};
   _globals: Global[] = [];
   _globalNames: { [name: string]: number } = {};
+  _memories: MemType[] = []; // memidx[]
 
   getFunctionTypeIndex(funcType: FuncType): number {
     const existingFuncTypeIndex = this._funcTypes.findIndex((existing) => {
@@ -96,6 +99,20 @@ export class ModuleContext {
     }
     this._globalNames[global.name] = this._globals.length;
     this._globals.push(global);
+  }
+
+  /**
+   * Define a new memory and receive the index of said memory.
+   */
+  defineMemory(mem: MemType): number {
+    const index = this._memories.length;
+    if (index > 0) {
+      throw new Error(
+        "In the current version of WebAssembly, only one memory is allowed.",
+      );
+    }
+    this._memories.push(mem);
+    return index;
   }
 
   /**
@@ -193,7 +210,42 @@ export class ModuleContext {
     });
   }
 
-  _writeMemorySection() {}
+  /**
+   * The memory section has the id 5. It decodes into a vector of memories that
+   * represent the mems component of a module.
+   *
+   * https://webassembly.github.io/spec/core/binary/modules.html#memory-section
+   */
+  _writeMemorySection() {
+    this._writeSection(0x05, () => {
+      this._writeVec(this._memories, (memory) => {
+        this._writeMemoryType(memory);
+      });
+    });
+  }
+
+  /**
+   * Memory types are encoded with their limits.
+   *
+   * https://webassembly.github.io/spec/core/binary/types.html#memory-types
+   */
+  _writeMemoryType(memType: MemType) {
+    this._writeLimits(memType);
+  }
+
+  /**
+   * Limits are encoded with a preceding flag indicating whether a maximum is present.
+   *
+   * https://webassembly.github.io/spec/core/binary/types.html#limits
+   */
+  _writeLimits(limits: Limits) {
+    const flag = limits.max == null ? 0x00 : 0x01;
+    this._bytes.push(flag);
+    this._writeU32(limits.min);
+    if (limits.max != null) {
+      this._writeU32(limits.max);
+    }
+  }
 
   /**
    * The global section has the id 6. It decodes into a vector of globals that
@@ -672,7 +724,44 @@ export class ExpressionContext {
    * https://webassembly.github.io/spec/core/binary/instructions.html#memory-instructions
    */
 
-  // TODO
+  i32Load(offset: number, align: number) {
+    this._bytes.push(0x28);
+    this._writeMemArg(offset, align);
+  }
+
+  // TODO...
+
+  i32Store(offset: number, align: number) {
+    this._bytes.push(0x36);
+    this._writeMemArg(offset, align);
+  }
+
+  // TODO...
+
+  /**
+   * The memory.size instruction returns the current size of a memory.
+   */
+  memorySize() {
+    this._bytes.push(0x3f);
+    this._bytes.push(0x00); // Memory index. Always 0 in current version of WebAssembly.
+  }
+
+  /**
+   * The memory.grow instruction grows memory by a given delta and returns the
+   * previous size, or -1 if enough memory cannot be allocated. Both instructions
+   * operate in units of page size.
+   */
+  memoryGrow() {
+    this._bytes.push(0x40);
+    this._bytes.push(0x00); // Memory index. Always 0 in current version of WebAssembly.
+  }
+  /**
+   * MemArg ::= align:u32 offset:u32
+   */
+  _writeMemArg(offset: number, align: number) {
+    this._writeU32(align);
+    this._writeU32(offset);
+  }
 
   /**
    * Numeric Instructions
@@ -683,8 +772,71 @@ export class ExpressionContext {
    * https://webassembly.github.io/spec/core/binary/instructions.html#numeric-instructions
    */
 
+  i32EqZ() {
+    this._bytes.push(0x45);
+  }
   i32Eq() {
     this._bytes.push(0x46);
+  }
+  i32Ne() {
+    this._bytes.push(0x47);
+  }
+  i32LtS() {
+    this._bytes.push(0x48);
+  }
+  i32LtU() {
+    this._bytes.push(0x49);
+  }
+  i32GtS() {
+    this._bytes.push(0x4a);
+  }
+  i32GtU() {
+    this._bytes.push(0x4b);
+  }
+  i32LeS() {
+    this._bytes.push(0x4c);
+  }
+  i32LeU() {
+    this._bytes.push(0x4d);
+  }
+  i32GeS() {
+    this._bytes.push(0x4e);
+  }
+  i32GeU() {
+    this._bytes.push(0x4f);
+  }
+  i64EqZ() {
+    this._bytes.push(0x50);
+  }
+  i64Eq() {
+    this._bytes.push(0x51);
+  }
+  i64Ne() {
+    this._bytes.push(0x52);
+  }
+  i64LtS() {
+    this._bytes.push(0x53);
+  }
+  i64LtU() {
+    this._bytes.push(0x54);
+  }
+  i64GtS() {
+    this._bytes.push(0x55);
+  }
+  i64GtU() {
+    this._bytes.push(0x56);
+  }
+  i64LeS() {
+    this._bytes.push(0x57);
+  }
+  i64LeU() {
+    this._bytes.push(0x58);
+  }
+  i64GeS() {
+    this._bytes.push(0x59);
+  }
+  i64GeU() {
+    this._bytes.push(0x5a);
   }
 
   f64Eq() {
@@ -714,6 +866,7 @@ export class ExpressionContext {
   /**
    * All other numeric instructions are plain opcodes without any immediates.
    */
+
   i32Clz() {
     this._bytes.push(0x67);
   }

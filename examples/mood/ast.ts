@@ -1,3 +1,4 @@
+import { TypePredicateKind } from "typescript";
 import { Location } from "./Location";
 
 export type AstNode = Program | Declaration | Expression | Parameter;
@@ -9,7 +10,8 @@ export type Expression =
   | ExpressionPath
   | BlockExpression
   | VariableDeclaration
-  | StructConstruction;
+  | StructConstruction
+  | MemberExpression;
 
 export type Program = {
   type: "Program";
@@ -142,6 +144,14 @@ export type BinaryExpression = {
   left: Expression;
   right: Expression;
   operator: "+" | "*" | "==";
+  loc: Location;
+  typeId: number;
+};
+
+export type MemberExpression = {
+  type: "MemberExpression";
+  head: Identifier;
+  tail: Identifier;
   loc: Location;
   typeId: number;
 };

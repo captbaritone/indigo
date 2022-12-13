@@ -38,6 +38,18 @@ export type ValType = NumType | VecType | RefType;
  */
 export type ResultType = ValType[];
 
+/**
+ * The min size in the limits of the memory type specifies the initial size of that
+ * memory, while its max, if present, restricts the size to which it can grow
+ * later. Both are in units of page size.
+ */
+export type MemType = Limits;
+
+export type Limits = {
+  min: number;
+  max?: number;
+};
+
 // TODO: Consider renaming since there's a global type by this name
 export type Global = { name: string; globalType: GlobalType; init: Expression };
 

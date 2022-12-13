@@ -27,11 +27,13 @@ type FunctionSymbol = {
 
 type StructSymbol = {
   type: "struct";
+  name: string;
   fields: { name: string; valueType: SymbolType }[];
 };
 
 type EnumSymbol = {
   type: "enum";
+  name: string;
   variants: { name: string; valueType: SymbolType | null }[];
 };
 

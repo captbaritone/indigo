@@ -1,5 +1,5 @@
-import { ExpressionContext, ModuleContext } from "../..";
-import { NumType } from "../../types";
+import { ExpressionContext, FunctionContext, ModuleContext } from "../..";
+import { NumType, Mut } from "../../types";
 import { AstNode } from "./ast";
 import { SymbolType } from "./SymbolTable";
 import TypeTable from "./TypeTable";
@@ -19,6 +19,83 @@ export class WasmEmitter {
   constructor(ctx: ModuleContext, typeTable: TypeTable) {
     this.ctx = ctx;
     this._typeTable = typeTable;
+    // Start allocation with one page.
+    // We don't set a max memory size.
+    this.ctx.defineMemory({ min: 1 });
+    this._defineBuiltins();
+  }
+
+  _defineBuiltins() {
+    // TODO: Proper API for initializing globals. This probably requires an
+    // expression context that is not tied to a function.
+    const dummyFunctionContext = new FunctionContext(this.ctx, {}, []);
+    const expression = new ExpressionContext(dummyFunctionContext);
+    expression.i32Const(0);
+    // TODO: Move away from a string-based naming and push this responsibility
+    // up to the compiler and away from Indigo. This will allow the language to
+    // implement its own notion of scoping and public/private APIs.
+    // Specifically here we want this function/globals to only be consumed by
+    // the compiler's own output.
+    this.ctx.declareGlobal({
+      name: "heap_pointer",
+      globalType: { type: NumType.I32, mut: Mut.VAR },
+      init: expression._bytes,
+    });
+    this.ctx.declareGlobal({
+      name: "next_heap_pointer",
+      globalType: { type: NumType.I32, mut: Mut.VAR },
+      init: expression._bytes,
+    });
+    this.ctx.declareFunction({
+      name: "malloc",
+      params: { size: NumType.I32 },
+      results: [],
+      export: false,
+    });
+
+    // For now we use a simple bump allocator and simply leak memory under the
+    // assumption/hope that we won't run out before the program terminates.
+    //
+    // Ideally this function would return the "heap_pointer" offset. However,
+    // consumers of this function need to duplicate the offset on the stack,
+    // since it's used to compute each field's offset. Since Wasm lacks a dupe
+    // instruction, we opt instead to make the global "heap_pointer" part of this
+    // function's API and let the consumer of this function read to global to get
+    // the "returned" offset.
+    //
+    // This requires careful consideration on the part of the caller since they
+    // must ensure that there are no other calls to malloc between the original
+    // call and the reading of "heap_pointer". Hopefully in the future we can
+    // find a less-brittle solution.
+    this.ctx.defineFunction("malloc", (exp) => {
+      // TODO: Check that we have free memory and grow if not.
+      /*
+      exp.defineLocal("over", NumType.I32);
+      exp.globalGet("next_heap_pointer");
+      // This is given in page size
+      // page = 65,536 bytes = 64 KiB
+      exp.memorySize();
+      exp.i32Sub();
+      exp.localTee("over");
+      exp.i32Const(0);
+      exp.i32LtS();
+      exp.if({ kind: "EMPTY" }, (exp) => {
+        // TODO: Is this supposed to be page sizes?
+        exp.localGet("over");
+        exp.memoryGrow();
+        // TODO: What if memory grow fails?
+        // For now we can just ignore it and trust that we will trap as soon as
+        // we try to access the memory.
+        exp.drop();
+      });
+      */
+      exp.globalGet("next_heap_pointer");
+      exp.globalSet("heap_pointer");
+      exp.localGet("size");
+      exp.globalGet("next_heap_pointer");
+      exp.i32Add();
+      exp.globalSet("next_heap_pointer");
+    });
   }
 
   emit(ast: AstNode) {
@@ -67,10 +144,73 @@ export class WasmEmitter {
         break;
       }
       case "StructConstruction": {
-        // TODO: Implement this.
-        // Write the struct to the heap
-        // Return the pointer to the struct
-        this.exp.i32Const(0);
+        // Compute struct size
+        const structType = this.lookupAstNode(ast.typeId);
+        if (structType.type !== "struct") {
+          throw new Error("Expected struct type");
+        }
+        let size = 0;
+        for (const field of structType.fields) {
+          switch (field.valueType.type) {
+            case "struct":
+            case "i32":
+              size += 4;
+              break;
+            default:
+              throw new Error(`Unhandled field type: ${field.valueType.type}`);
+          }
+        }
+        this.exp.i32Const(size);
+        this.exp.call("malloc");
+        // Store the pointer to the struct
+        // This will be the return value of this expression (will not get
+        // consumed when assigning fields).
+        this.exp.globalGet("heap_pointer");
+
+        // Each field allocation will be done relative to this pointer and thus
+        // will consume one instance of it from the stack.
+        // We need to duplicate the pointer on the stack here since it's a global
+        // value and thus might be mutated as we recuse into the field values.
+        for (const field of structType.fields) {
+          this.exp.globalGet("heap_pointer");
+        }
+
+        let offset = 0;
+        // I'm going to need to be able to duplicate this.
+        // Pointer to the struct is now on the stack
+        for (const field of structType.fields) {
+          const value = ast.fields.find((f) => f.name.name === field.name);
+          if (value == null) {
+            throw new Error(`Missing field.`);
+          }
+          this.emit(value.value);
+          this.exp.i32Store(offset, 0);
+          switch (field.valueType.type) {
+            case "struct":
+            case "i32":
+              offset += 4;
+              break;
+            default:
+              throw new Error(`Unhandled field type: ${field.valueType.type}`);
+          }
+        }
+        // Earlier we duplicated the pointer to the struct on the stack.
+        break;
+      }
+      case "MemberExpression": {
+        this.emit(ast.head);
+        const struct = this.lookupAstNode(ast.head.typeId);
+        if (struct.type !== "struct") {
+          throw new Error("Expected struct type");
+        }
+        let offset = 0;
+        for (const field of struct.fields) {
+          if (field.name === ast.tail.name) {
+            break;
+          }
+          offset += 4;
+        }
+        this.exp.i32Load(offset, 0);
         break;
       }
       case "BinaryExpression": {
@@ -200,18 +340,24 @@ export class WasmEmitter {
   }
   lookupAstNodeNumType(id: number): NumType {
     const type = this.lookupAstNode(id);
-    switch (type.type) {
-      case "f64":
-        return NumType.F64;
-      case "i32":
-        return NumType.I32;
-      case "bool":
-        return NumType.I32;
-      case "enum":
-        return NumType.I32;
+    return numTypeFromValueType(type);
+  }
+}
 
-      default:
-        throw new Error(`Unknown type ${type.type}`);
-    }
+function numTypeFromValueType(type: SymbolType): NumType {
+  switch (type.type) {
+    case "f64":
+      return NumType.F64;
+    case "i32":
+      return NumType.I32;
+    case "bool":
+      return NumType.I32;
+    case "enum":
+      return NumType.I32;
+    case "struct":
+      return NumType.I32;
+
+    default:
+      throw new Error(`Unknown type ${type}`);
   }
 }
