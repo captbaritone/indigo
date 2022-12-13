@@ -1,20 +1,19 @@
 import test from "node:test";
 import { strict as assert } from "node:assert";
 
-import { FunctionContext, ModuleContext } from ".";
+import { ExpressionContext, ModuleContext } from ".";
 import { Mut, NumType } from "./types";
 
 test("Echo", async (t) => {
   const context = new ModuleContext();
-  context.declareFunction({
-    params: { input: NumType.I32 },
+  const funcIndex = context.declareFunction({
+    params: [NumType.I32],
     results: [NumType.I32],
-    name: "echo",
-    export: true,
   });
-  context.defineFunction("echo", (exp) => {
-    exp.localGet("input");
+  context.defineFunction(funcIndex, (func) => {
+    func.exp.localGet(0);
   });
+  context.exportFunction("echo", funcIndex);
 
   const instance = await context.getInstance();
   // @ts-ignore
@@ -23,15 +22,14 @@ test("Echo", async (t) => {
 
 test("Add", async (t) => {
   const context = new ModuleContext();
-  context.declareFunction({
-    params: { a: NumType.I32, b: NumType.I32 },
+  const funcIndex = context.declareFunction({
+    params: [NumType.I32, NumType.I32],
     results: [NumType.I32],
-    name: "add",
-    export: true,
   });
-  context.defineFunction("add", (exp) => {
-    exp.localGet("a");
-    exp.localGet("b");
+  context.exportFunction("add", funcIndex);
+  context.defineFunction(funcIndex, ({ exp }) => {
+    exp.localGet(0);
+    exp.localGet(1);
     exp.i32Add();
   });
 
@@ -42,26 +40,25 @@ test("Add", async (t) => {
 
 test("Function call", async (t) => {
   const context = new ModuleContext();
-  context.declareFunction({
-    params: {},
+  const functionIndex = context.declareFunction({
+    params: [],
     results: [NumType.I32],
-    name: "ten",
-    export: false,
   });
 
-  context.defineFunction("ten", (exp) => {
+  context.defineFunction(functionIndex, ({ exp }) => {
     exp.i32Const(10);
   });
 
-  context.declareFunction({
-    params: { a: NumType.I32, b: NumType.I32 },
+  const otherFunctionIndex = context.declareFunction({
+    params: [NumType.I32, NumType.I32],
     results: [NumType.I32],
-    name: "twenty",
-    export: true,
   });
-  context.defineFunction("twenty", (exp) => {
-    exp.call("ten");
-    exp.call("ten");
+
+  context.exportFunction("twenty", otherFunctionIndex);
+
+  context.defineFunction(otherFunctionIndex, ({ exp }) => {
+    exp.call(functionIndex);
+    exp.call(functionIndex);
     exp.i32Add();
   });
 
@@ -72,26 +69,24 @@ test("Function call", async (t) => {
 
 test("Global", async (t) => {
   const context = new ModuleContext();
-  context.declareGlobal({
-    name: "g",
+  const globalIndex = context.declareGlobal({
     globalType: {
       type: NumType.I32,
       mut: Mut.VAR,
     },
     init: [0x41, 1],
   });
-  const getG = context.declareFunction({
-    params: {},
+  const getGIndex = context.declareFunction({
+    params: [],
     results: [NumType.I32],
-    name: "getG",
-    export: true,
   });
-  context.defineFunction("getG", (exp) => {
-    exp.globalGet("g");
+  context.exportFunction("getG", getGIndex);
+  context.defineFunction(getGIndex, ({ exp }) => {
+    exp.globalGet(globalIndex);
     exp.i32Const(1);
     exp.i32Add();
-    exp.globalSet("g");
-    exp.globalGet("g");
+    exp.globalSet(globalIndex);
+    exp.globalGet(globalIndex);
   });
 
   const instance = await context.getInstance();
@@ -103,12 +98,12 @@ test("Global", async (t) => {
 
 test("Tiny compiler", async () => {
   const ctx = new ModuleContext();
-  ctx.declareFunction({
-    name: "run",
-    params: {},
+  const functionIndex = ctx.declareFunction({
+    params: [],
     results: [NumType.I32],
-    export: true,
   });
+
+  ctx.exportFunction("run", functionIndex);
 
   const ast = {
     type: "add",
@@ -120,8 +115,7 @@ test("Tiny compiler", async () => {
     },
   };
 
-  ctx.defineFunction("run", (exp) => {
-    // @ts-ignore
+  ctx.defineFunction(functionIndex, ({ exp }) => {
     compile(exp, ast);
   });
 
@@ -131,7 +125,7 @@ test("Tiny compiler", async () => {
 });
 
 // A tiny compiler
-function compile(exp: FunctionContext, node: any) {
+function compile(exp: ExpressionContext, node: any) {
   switch (node.type) {
     case "num":
       // @ts-ignore
