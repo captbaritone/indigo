@@ -1,3 +1,5 @@
+import { ExpressionContext } from ".";
+
 /**
  * Number types are encoded by a single byte.
  *

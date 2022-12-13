@@ -32,11 +32,11 @@ export class ModuleContext {
   // TODO: Can this be a dataview so that we don't have to store the floats?
   _bytes: number[] = [];
   _funcTypes: FuncType[] = [];
-  _functions: number[] = []; // funcidx[]
+  _functions: number[] = [];
   _exports: Export[] = [];
   _code: FunctionContext[] = [];
-  _globals: Global[] = [];
-  _memories: MemType[] = []; // memidx[]
+  _globals: GlobalContext[] = [];
+  _memories: MemType[] = [];
 
   getFunctionTypeIndex(funcType: FuncType): number {
     const existingFuncTypeIndex = this._funcTypes.findIndex((existing) => {
@@ -50,7 +50,11 @@ export class ModuleContext {
     return nextFuncTypeIndex;
   }
 
-  declareFunction(func: FunctionDeclaration): number {
+  declareFunction(
+    func: FunctionDeclaration,
+    cb: (func: FunctionContext) => void,
+  ): number {
+    const nextFuncIndex = this._functions.length;
     const functionContext = new FunctionContext(
       this,
       func.params,
@@ -60,10 +64,9 @@ export class ModuleContext {
       functionContext.getFuncType(),
     );
 
-    const nextFuncIndex = this._functions.length;
     this._functions.push(funcTypeIndex);
-
     this._code.push(functionContext);
+    cb(functionContext);
     return nextFuncIndex;
   }
 
@@ -76,17 +79,14 @@ export class ModuleContext {
     });
   }
 
-  defineFunction(index: number, cb: (func: FunctionContext) => void) {
-    const func = this._code[index];
-    if (func == null) {
-      throw new Error(`Function "${name}" does not exist`);
-    }
-    cb(func);
-  }
-
-  declareGlobal(global: Global): number {
+  declareGlobal(
+    type: GlobalType,
+    cb: (ctx: ExpressionContext) => void,
+  ): number {
     const index = this._globals.length;
-    this._globals.push(global);
+    const globalContext = new GlobalContext(type);
+    this._globals.push(globalContext);
+    cb(globalContext.init);
     return index;
   }
 
@@ -248,9 +248,9 @@ export class ModuleContext {
     });
   }
 
-  _writeGlobal(global: Global) {
-    this._writeGlobalType(global.globalType);
-    this._writeExpression(global.init);
+  _writeGlobal(global: GlobalContext) {
+    this._writeGlobalType(global._type);
+    this._writeExpression(global.init.getExpression());
   }
 
   _writeGlobalType(globalType: GlobalType) {
@@ -503,10 +503,30 @@ export class FunctionContext {
   }
 }
 
+export class GlobalContext {
+  _type: GlobalType;
+  init: ExpressionContext;
+  constructor(type: GlobalType) {
+    this._type = type;
+    this.init = new ExpressionContext();
+  }
+
+  getGlobal(): Global {
+    return {
+      globalType: this._type,
+      init: this.init.getExpression(),
+    };
+  }
+}
+
 export class ExpressionContext {
   _bytes: number[];
   constructor() {
     this._bytes = [];
+  }
+
+  getExpression(): Expression {
+    return this._bytes;
   }
 
   /**

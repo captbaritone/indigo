@@ -285,7 +285,7 @@ class TypeChecker {
         ),
       );
     }
-    // Typecheck/annotate the fields.
+    // Type-check/annotate the fields.
     for (const field of node.fields) {
       const fieldType = struct.fields.find((f) => f.name === field.name.name);
       // Incorrect field names

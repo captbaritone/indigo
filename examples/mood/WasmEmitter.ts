@@ -1,4 +1,3 @@
-import { mainModule } from "process";
 import { ExpressionContext, FunctionContext, ModuleContext } from "../..";
 import { NumType, Mut } from "../../types";
 import { AstNode } from "./ast";
@@ -33,21 +32,13 @@ export class WasmEmitter {
   }
 
   _defineBuiltins() {
-    // TODO: Proper API for initializing globals. This probably requires an
-    // expression context that is not tied to a function.
-    const expression = new ExpressionContext();
-    expression.i32Const(0);
-    this._heapPointerIndex = this.ctx.declareGlobal({
-      globalType: { type: NumType.I32, mut: Mut.VAR },
-      init: expression._bytes,
+    const i32Mut = { type: NumType.I32, mut: Mut.VAR };
+    this._heapPointerIndex = this.ctx.declareGlobal(i32Mut, (init) => {
+      init.i32Const(0);
     });
-    const nextHeapPointer = this.ctx.declareGlobal({
-      globalType: { type: NumType.I32, mut: Mut.VAR },
-      init: expression._bytes,
-    });
-    this._mallocIndex = this.ctx.declareFunction({
-      params: [NumType.I32],
-      results: [],
+
+    const nextHeapPointerIndex = this.ctx.declareGlobal(i32Mut, (init) => {
+      init.i32Const(0);
     });
 
     // For now we use a simple bump allocator and simply leak memory under the
@@ -64,36 +55,39 @@ export class WasmEmitter {
     // must ensure that there are no other calls to malloc between the original
     // call and the reading of "heap_pointer". Hopefully in the future we can
     // find a less-brittle solution.
-    this.ctx.defineFunction(this._mallocIndex, (func) => {
-      const exp = func.exp;
+    const defineMalloc = (exp: ExpressionContext) => {
       // TODO: Check that we have free memory and grow if not.
       /*
-      exp.defineLocal("over", NumType.I32);
-      exp.globalGet("next_heap_pointer");
-      // This is given in page size
-      // page = 65,536 bytes = 64 KiB
-      exp.memorySize();
-      exp.i32Sub();
-      exp.localTee("over");
-      exp.i32Const(0);
-      exp.i32LtS();
-      exp.if({ kind: "EMPTY" }, (exp) => {
-        // TODO: Is this supposed to be page sizes?
-        exp.localGet("over");
-        exp.memoryGrow();
-        // TODO: What if memory grow fails?
-        // For now we can just ignore it and trust that we will trap as soon as
-        // we try to access the memory.
-        exp.drop();
-      });
-      */
-      exp.globalGet(nextHeapPointer);
+        exp.defineLocal("over", NumType.I32);
+        exp.globalGet("next_heap_pointer");
+        // This is given in page size
+        // page = 65,536 bytes = 64 KiB
+        exp.memorySize();
+        exp.i32Sub();
+        exp.localTee("over");
+        exp.i32Const(0);
+        exp.i32LtS();
+        exp.if({ kind: "EMPTY" }, (exp) => {
+          // TODO: Is this supposed to be page sizes?
+          exp.localGet("over");
+          exp.memoryGrow();
+          // TODO: What if memory grow fails?
+          // For now we can just ignore it and trust that we will trap as soon as
+          // we try to access the memory.
+          exp.drop();
+        });
+        */
+      exp.globalGet(nextHeapPointerIndex);
       exp.globalSet(this._heapPointerIndex);
       exp.localGet(0 /* size */);
-      exp.globalGet(nextHeapPointer);
+      exp.globalGet(nextHeapPointerIndex);
       exp.i32Add();
-      exp.globalSet(nextHeapPointer);
-    });
+      exp.globalSet(nextHeapPointerIndex);
+    };
+    this._mallocIndex = this.ctx.declareFunction(
+      { params: [NumType.I32], results: [] },
+      ({ exp }) => defineMalloc(exp),
+    );
   }
 
   emit(ast: AstNode) {
@@ -106,29 +100,30 @@ export class WasmEmitter {
       }
       case "FunctionDeclaration": {
         const name = ast.id.name;
-        const params: NumType[] = [];
         const locals = new Map<string, number>();
+
+        const params: NumType[] = [];
         for (const [i, param] of ast.params.entries()) {
           params.push(this.lookupAstNodeNumType(param.typeId));
           locals.set(param.name.name, i);
         }
-        const funcIndex = this.ctx.declareFunction({
-          params,
-          results: [this.lookupAstNodeNumType(ast.returnType.typeId)],
-        });
 
-        this.defineFunction(name, funcIndex);
+        const results = [this.lookupAstNodeNumType(ast.returnType.typeId)];
 
-        if (ast.public) {
-          this.ctx.exportFunction(name, funcIndex);
-        }
-
-        this.ctx.defineFunction(funcIndex, (func) => {
+        const index = this.ctx.declareFunction({ params, results }, (func) => {
           this._locals = locals;
           this.exp = func.exp;
           this.func = func;
           this.emit(ast.body);
         });
+
+        // TODO: This won't be compatible with recursive functions.
+        this.defineFunction(name, index);
+
+        if (ast.public) {
+          this.ctx.exportFunction(name, index);
+        }
+
         break;
       }
       case "BlockExpression": {
