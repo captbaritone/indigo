@@ -98,6 +98,10 @@ class TypeChecker {
         // A declaration has no type itself.
         return { type: "empty" };
       }
+      case "StructDeclaration": {
+        // A declaration has no type itself.
+        return { type: "empty" };
+      }
       case "Parameter": {
         const paramType = this.fromAnnotation(node.annotation, scope);
         return this.typeAstNode(node.typeId, paramType);

@@ -14,6 +14,8 @@ import {
   VariableDeclaration,
   ExpressionPath,
   CallExpression,
+  StructDeclaration,
+  StructField,
 } from "./ast";
 import { Location, union } from "./Location";
 import DiagnosticError, { annotate } from "./DiagnosticError";
@@ -68,7 +70,7 @@ class Parser {
     };
   }
 
-  // Definition ::= EnumDeclaration | FunctionDeclaration
+  // Definition ::= EnumDeclaration | FunctionDeclaration | StructDeclaration
   parseDefinition(): Declaration {
     if (this.peekEnumDeclaration()) {
       return this.parseEnumDeclaration();
@@ -76,10 +78,54 @@ class Parser {
     if (this.peekFunctionDeclaration()) {
       return this.parseFunctionDeclaration();
     }
+    if (this.peekStructDeclaration()) {
+      return this.parseStructDeclaration();
+    }
     throw new DiagnosticError(
       "Expected a definition.",
       annotate(this.nextLoc(), `Found ${this.peek().type}`),
     );
+  }
+
+  peekStructDeclaration(): boolean {
+    return this.peek().type === "struct";
+  }
+
+  // StructDeclaration ::= "struct" Identifier "{" StructField* "}"
+  parseStructDeclaration(): StructDeclaration {
+    const start = this.nextLoc();
+    this.expect("struct");
+    const id = this.parseIdentifier();
+    this.expect("{");
+    const fields: StructField[] = [];
+    while (this.peek().type !== "}" && this.peek().type !== "EOF") {
+      fields.push(this.parseStructField());
+      if (this.peek().type === ",") {
+        this.next();
+      }
+    }
+    this.expect("}");
+
+    return {
+      type: "StructDeclaration",
+      id,
+      fields,
+      loc: this.locToPrev(start),
+    };
+  }
+
+  // StructField ::= Identifier ":" TypeAnnotation
+  parseStructField(): StructField {
+    const start = this.nextLoc();
+    const id = this.parseIdentifier();
+    this.expect(":");
+    const annotation = this.parseIdentifier();
+    return {
+      type: "StructField",
+      id,
+      annotation,
+      loc: this.locToPrev(start),
+    };
   }
 
   peekFunctionDeclaration(): boolean {

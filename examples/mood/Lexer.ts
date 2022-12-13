@@ -8,7 +8,8 @@ type Keyword =
   | "else"
   | "while"
   | "return"
-  | "enum";
+  | "enum"
+  | "struct";
 type Syntax =
   | "("
   | ")"
@@ -198,6 +199,18 @@ class Lexer {
             code[this.position + 5] === "n"
           ) {
             this.literal("return");
+            break;
+          }
+
+        case "s":
+          if (
+            code[this.position + 1] === "t" &&
+            code[this.position + 2] === "r" &&
+            code[this.position + 3] === "u" &&
+            code[this.position + 4] === "c" &&
+            code[this.position + 5] === "t"
+          ) {
+            this.literal("struct");
             break;
           }
         case "w":

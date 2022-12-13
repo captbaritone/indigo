@@ -16,7 +16,10 @@ export type Program = {
   loc: Location;
 };
 
-export type Declaration = FunctionDeclaration | EnumDeclaration;
+export type Declaration =
+  | FunctionDeclaration
+  | EnumDeclaration
+  | StructDeclaration;
 
 export type FunctionDeclaration = {
   type: "FunctionDeclaration";
@@ -25,6 +28,20 @@ export type FunctionDeclaration = {
   public: boolean;
   body: BlockExpression;
   returnType: TypeAnnotation;
+  loc: Location;
+};
+
+export type StructDeclaration = {
+  type: "StructDeclaration";
+  id: Identifier;
+  fields: StructField[];
+  loc: Location;
+};
+
+export type StructField = {
+  type: "StructField";
+  id: Identifier;
+  annotation: TypeAnnotation;
   loc: Location;
 };
 

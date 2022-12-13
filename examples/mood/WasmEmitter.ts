@@ -60,8 +60,9 @@ export class WasmEmitter {
         }
         break;
       }
+      case "StructDeclaration":
       case "EnumDeclaration": {
-        // This is just a type declaration, which we processed during type
+        // These are just type declarations, which we processed during type
         // checking. No need to emit anything.
         break;
       }
