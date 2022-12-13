@@ -337,7 +337,6 @@ class TypeChecker {
       type: "function",
       params,
       result,
-      scope: functionScope,
     });
 
     this.expectType(node.body, result, functionScope);

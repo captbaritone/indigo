@@ -22,7 +22,6 @@ type FunctionSymbol = {
   type: "function";
   params: SymbolType[];
   result: SymbolType;
-  scope: SymbolTable;
 };
 
 type StructSymbol = {
