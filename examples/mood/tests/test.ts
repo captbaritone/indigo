@@ -1,9 +1,7 @@
 import compile from "../compiler";
-import * as Parser from "../Parser";
 import fs from "fs";
 import path from "path";
 import { diff } from "jest-diff";
-import { catchToResult } from "../DiagnosticError";
 
 const WRITE_FIXTURES = process.argv.some((arg) => arg === "--write");
 const filter = process.argv.find((arg) => arg.startsWith("--filter="));

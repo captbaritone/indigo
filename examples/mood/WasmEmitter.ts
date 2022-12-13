@@ -1,3 +1,4 @@
+import { mainModule } from "process";
 import { ExpressionContext, FunctionContext, ModuleContext } from "../..";
 import { NumType, Mut } from "../../types";
 import { AstNode } from "./ast";
@@ -14,8 +15,14 @@ export function emit(ctx: ModuleContext, ast: AstNode, typeTable: TypeTable) {
 
 export class WasmEmitter {
   ctx: ModuleContext;
+  func: FunctionContext;
   exp: ExpressionContext;
   _typeTable: TypeTable;
+  _globals: Map<string, number> = new Map();
+  _functions: Map<string, number> = new Map();
+  _mallocIndex: number;
+  _heapPointerIndex: number;
+  _locals: Map<string, number>;
   constructor(ctx: ModuleContext, typeTable: TypeTable) {
     this.ctx = ctx;
     this._typeTable = typeTable;
@@ -28,29 +35,19 @@ export class WasmEmitter {
   _defineBuiltins() {
     // TODO: Proper API for initializing globals. This probably requires an
     // expression context that is not tied to a function.
-    const dummyFunctionContext = new FunctionContext(this.ctx, {}, []);
-    const expression = new ExpressionContext(dummyFunctionContext);
+    const expression = new ExpressionContext();
     expression.i32Const(0);
-    // TODO: Move away from a string-based naming and push this responsibility
-    // up to the compiler and away from Indigo. This will allow the language to
-    // implement its own notion of scoping and public/private APIs.
-    // Specifically here we want this function/globals to only be consumed by
-    // the compiler's own output.
-    this.ctx.declareGlobal({
-      name: "heap_pointer",
+    this._heapPointerIndex = this.ctx.declareGlobal({
       globalType: { type: NumType.I32, mut: Mut.VAR },
       init: expression._bytes,
     });
-    this.ctx.declareGlobal({
-      name: "next_heap_pointer",
+    const nextHeapPointer = this.ctx.declareGlobal({
       globalType: { type: NumType.I32, mut: Mut.VAR },
       init: expression._bytes,
     });
-    this.ctx.declareFunction({
-      name: "malloc",
-      params: { size: NumType.I32 },
+    this._mallocIndex = this.ctx.declareFunction({
+      params: [NumType.I32],
       results: [],
-      export: false,
     });
 
     // For now we use a simple bump allocator and simply leak memory under the
@@ -67,7 +64,8 @@ export class WasmEmitter {
     // must ensure that there are no other calls to malloc between the original
     // call and the reading of "heap_pointer". Hopefully in the future we can
     // find a less-brittle solution.
-    this.ctx.defineFunction("malloc", (exp) => {
+    this.ctx.defineFunction(this._mallocIndex, (func) => {
+      const exp = func.exp;
       // TODO: Check that we have free memory and grow if not.
       /*
       exp.defineLocal("over", NumType.I32);
@@ -89,12 +87,12 @@ export class WasmEmitter {
         exp.drop();
       });
       */
-      exp.globalGet("next_heap_pointer");
-      exp.globalSet("heap_pointer");
-      exp.localGet("size");
-      exp.globalGet("next_heap_pointer");
+      exp.globalGet(nextHeapPointer);
+      exp.globalSet(this._heapPointerIndex);
+      exp.localGet(0 /* size */);
+      exp.globalGet(nextHeapPointer);
       exp.i32Add();
-      exp.globalSet("next_heap_pointer");
+      exp.globalSet(nextHeapPointer);
     });
   }
 
@@ -108,19 +106,27 @@ export class WasmEmitter {
       }
       case "FunctionDeclaration": {
         const name = ast.id.name;
-        const params = {};
-        for (const param of ast.params) {
-          params[param.name.name] = this.lookupAstNodeNumType(param.typeId);
+        const params: NumType[] = [];
+        const locals = new Map<string, number>();
+        for (const [i, param] of ast.params.entries()) {
+          params.push(this.lookupAstNodeNumType(param.typeId));
+          locals.set(param.name.name, i);
         }
-        this.ctx.declareFunction({
-          name,
+        const funcIndex = this.ctx.declareFunction({
           params,
           results: [this.lookupAstNodeNumType(ast.returnType.typeId)],
-          export: ast.public,
         });
 
-        this.ctx.defineFunction(name, (exp) => {
-          this.exp = exp;
+        this.defineFunction(name, funcIndex);
+
+        if (ast.public) {
+          this.ctx.exportFunction(name, funcIndex);
+        }
+
+        this.ctx.defineFunction(funcIndex, (func) => {
+          this._locals = locals;
+          this.exp = func.exp;
+          this.func = func;
           this.emit(ast.body);
         });
         break;
@@ -161,18 +167,18 @@ export class WasmEmitter {
           }
         }
         this.exp.i32Const(size);
-        this.exp.call("malloc");
+        this.exp.call(this._mallocIndex);
         // Store the pointer to the struct
         // This will be the return value of this expression (will not get
         // consumed when assigning fields).
-        this.exp.globalGet("heap_pointer");
+        this.exp.globalGet(this._heapPointerIndex);
 
         // Each field allocation will be done relative to this pointer and thus
         // will consume one instance of it from the stack.
         // We need to duplicate the pointer on the stack here since it's a global
         // value and thus might be mutated as we recuse into the field values.
         for (const field of structType.fields) {
-          this.exp.globalGet("heap_pointer");
+          this.exp.globalGet(this._heapPointerIndex);
         }
 
         let offset = 0;
@@ -271,7 +277,7 @@ export class WasmEmitter {
         for (const arg of ast.args) {
           this.emit(arg);
         }
-        this.exp.call(ast.callee.name);
+        this.exp.call(this.getFunction(ast.callee.name));
         break;
       }
       case "ExpressionPath": {
@@ -292,13 +298,14 @@ export class WasmEmitter {
       }
       case "VariableDeclaration": {
         const type = this.lookupAstNodeNumType(ast.typeId);
-        this.exp.defineLocal(ast.name.name, type);
+        const index = this.func.defineLocal(type);
+        this.defineLocal(ast.name.name, index);
         this.emit(ast.value);
-        this.exp.localTee(ast.name.name);
+        this.exp.localTee(index);
         break;
       }
       case "Identifier": {
-        this.exp.localGet(ast.name);
+        this.exp.localGet(this.getLocal(ast.name));
         break;
       }
       case "Literal": {
@@ -334,6 +341,29 @@ export class WasmEmitter {
         // @ts-ignore
         throw new Error(`Unknown node type: ${ast.type}`);
     }
+  }
+  defineLocal(name: string, index: number) {
+    this._locals.set(name, index);
+  }
+  getLocal(name: string): number {
+    const index = this._locals.get(name);
+    if (index == null) {
+      throw new Error(`Unknown local: ${name}`);
+    }
+    return index;
+  }
+  defineFunction(name: string, index: number) {
+    if (this._functions.has(name)) {
+      throw new Error(`Duplicate function name: "${name}"`);
+    }
+    this._functions.set(name, index);
+  }
+  getFunction(name: string): number {
+    const index = this._functions.get(name);
+    if (index == null) {
+      throw new Error(`Unknown function: ${name}`);
+    }
+    return index;
   }
   lookupAstNode(id: number): SymbolType {
     return this._typeTable.lookup(id);

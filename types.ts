@@ -51,7 +51,7 @@ export type Limits = {
 };
 
 // TODO: Consider renaming since there's a global type by this name
-export type Global = { name: string; globalType: GlobalType; init: Expression };
+export type Global = { globalType: GlobalType; init: Expression };
 
 export enum Mut {
   CONST = 0x00,
@@ -103,11 +103,4 @@ export type BlockType =
   | {
       kind: "VALUE";
       valType: ValType;
-    }
-  | {
-      kind: "FUNC_TYPE";
-      funcType: FuncType;
     };
-// TODO: We could do func type by name. Do people actually want to use existing
-// function types, or do they just want to use this type shape to define block
-// types that have noting to do with functions? I suspect the latter.

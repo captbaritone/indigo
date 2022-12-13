@@ -16,10 +16,8 @@ import {
 import * as Encoding from "./encoding";
 
 type FunctionDeclaration = {
-  name: string;
-  params: { [name: string]: ValType };
+  params: ValType[];
   results: ValType[];
-  export: boolean;
 };
 
 /**
@@ -37,9 +35,7 @@ export class ModuleContext {
   _functions: number[] = []; // funcidx[]
   _exports: Export[] = [];
   _code: FunctionContext[] = [];
-  _functionNames: { [name: string]: number } = {};
   _globals: Global[] = [];
-  _globalNames: { [name: string]: number } = {};
   _memories: MemType[] = []; // memidx[]
 
   getFunctionTypeIndex(funcType: FuncType): number {
@@ -54,7 +50,7 @@ export class ModuleContext {
     return nextFuncTypeIndex;
   }
 
-  declareFunction(func: FunctionDeclaration) {
+  declareFunction(func: FunctionDeclaration): number {
     const functionContext = new FunctionContext(
       this,
       func.params,
@@ -67,38 +63,31 @@ export class ModuleContext {
     const nextFuncIndex = this._functions.length;
     this._functions.push(funcTypeIndex);
 
-    if (this._functionNames.hasOwnProperty(func.name)) {
-      throw new Error(`Function name "${func.name}" already exists`);
-    }
-
-    this._functionNames[func.name] = nextFuncIndex;
-
-    // TODO: What about export order? I think exports need to come first?
-    if (func.export) {
-      this._exports.push({
-        name: func.name,
-        exportDesc: ExportDesc.FUNC_IDX,
-        index: nextFuncIndex,
-      });
-    }
     this._code.push(functionContext);
+    return nextFuncIndex;
   }
 
-  defineFunction(name: string, cb: (func: ExpressionContext) => void) {
-    const index = this._functionNames[name];
+  // TODO: What about export order? I think exports need to come first?
+  exportFunction(name: string, index: number): void {
+    this._exports.push({
+      name,
+      exportDesc: ExportDesc.FUNC_IDX,
+      index,
+    });
+  }
+
+  defineFunction(index: number, cb: (func: FunctionContext) => void) {
     const func = this._code[index];
     if (func == null) {
       throw new Error(`Function "${name}" does not exist`);
     }
-    cb(func._exp);
+    cb(func);
   }
 
-  declareGlobal(global: Global) {
-    if (this._globalNames.hasOwnProperty(global.name)) {
-      throw new Error(`Global name "${global.name}" already exists`);
-    }
-    this._globalNames[global.name] = this._globals.length;
+  declareGlobal(global: Global): number {
+    const index = this._globals.length;
     this._globals.push(global);
+    return index;
   }
 
   /**
@@ -480,43 +469,29 @@ export class ModuleContext {
  */
 export class FunctionContext {
   _ctx: ModuleContext;
-  _exp: ExpressionContext;
+  exp: ExpressionContext;
   _locals: LocalDeclaration[] = [];
   _params: ValType[];
   _results: ValType[];
-  // Map of locals (params and locals) to their index.
-  _variables: { [name: string]: number } = {};
 
-  constructor(
-    ctx: ModuleContext,
-    params: { [name: string]: ValType },
-    results: ValType[],
-  ) {
+  constructor(ctx: ModuleContext, params: ValType[], results: ValType[]) {
     this._ctx = ctx;
-    this._params = Object.values(params);
+    this._params = params;
     this._results = results;
-    const paramNames = Object.keys(params);
-    for (let i = 0; i < paramNames.length; i++) {
-      const paramName = paramNames[i];
-      this._variables[paramName] = i;
-    }
-    this._exp = new ExpressionContext(this);
+    this.exp = new ExpressionContext();
   }
 
-  defineLocal(name: string, type: ValType) {
-    if (this._variables.hasOwnProperty(name)) {
-      throw new Error(`Variable "${name}" is already defined`);
-    }
-    this._variables[name] = Object.keys(this._variables).length;
-
+  defineLocal(type: ValType): number {
+    const index = this._params.length + this._locals.length;
     // TODO: We could optimize this by combining locals of the same type
     this._locals.push({ count: 1, type });
+    return index;
   }
 
   getCode(): Code {
     return {
       locals: this._locals,
-      expression: this._exp._bytes,
+      expression: this.exp._bytes,
     };
   }
 
@@ -529,10 +504,8 @@ export class FunctionContext {
 }
 
 export class ExpressionContext {
-  _func: FunctionContext;
   _bytes: number[];
-  constructor(func: FunctionContext) {
-    this._func = func;
+  constructor() {
     this._bytes = [];
   }
 
@@ -593,10 +566,6 @@ export class ExpressionContext {
         // TODO: Ideally this would use _writeValType
         this._bytes.push(blockType.valType);
         break;
-      case "FUNC_TYPE":
-        const index = this._func._ctx.getFunctionTypeIndex(blockType.funcType);
-        this._writeI32(index);
-        break;
       default:
         throw new Error(`Unexpected block type: ${blockType}`);
     }
@@ -616,11 +585,7 @@ export class ExpressionContext {
   return() {
     this._bytes.push(0x0f);
   }
-  call(name: string) {
-    const index = this._func._ctx._functionNames[name];
-    if (index === undefined) {
-      throw new Error(`Function ${name} not found`);
-    }
+  call(index: number) {
     this._bytes.push(0x10);
     this._writeU32(index);
   }
@@ -676,26 +641,26 @@ export class ExpressionContext {
    *
    * https://webassembly.github.io/spec/core/binary/instructions.html#variable-instructions
    */
-  localGet(name: string) {
+  localGet(index: number) {
     this._bytes.push(0x20);
-    this._writeVariableIndex(name);
+    this._writeU32(index);
   }
-  localSet(name: string) {
+  localSet(index: number) {
     this._bytes.push(0x21);
-    this._writeVariableIndex(name);
+    this._writeU32(index);
   }
-  localTee(name: string) {
+  localTee(index: number) {
     this._bytes.push(0x22);
-    this._writeVariableIndex(name);
+    this._writeU32(index);
   }
-  globalGet(name: string) {
+  globalGet(index: number) {
     this._bytes.push(0x23);
-    this._writeGlobalIndex(name);
+    this._writeU32(index);
   }
-  globalSet(name: string) {
+  globalSet(index: number) {
     this._bytes.push(0x24);
     // TODO: We could ensure the global is mutable here.
-    this._writeGlobalIndex(name);
+    this._writeU32(index);
   }
 
   /**
@@ -996,27 +961,6 @@ export class ExpressionContext {
    */
 
   // TODO
-
-  defineLocal(name: string, type: ValType) {
-    this._func.defineLocal(name, type);
-  }
-
-  // Writes the index of a param or local
-  _writeVariableIndex(name: string) {
-    const index = this._func._variables[name];
-    if (index == null) {
-      throw new Error(`Unknown variable ${name}`);
-    }
-    this._writeU32(index);
-  }
-
-  _writeGlobalIndex(name: string) {
-    const index = this._func._ctx._globalNames[name];
-    if (index == null) {
-      throw new Error(`Unknown global ${name}`);
-    }
-    this._writeU32(index);
-  }
 
   _writeU32(n: number) {
     Encoding.appendU32(this._bytes, n);
