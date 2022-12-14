@@ -416,15 +416,13 @@ class TypeChecker {
             leftType.type === "f64" ||
             leftType.type === "i32" ||
             leftType.type === "bool" ||
-            leftType.type === "enum"
+            leftType.type === "enum" ||
+            leftType.type === "struct"
           )
         ) {
           throw new DiagnosticError(
-            `Expected a number or boolean.`,
-            annotate(
-              node.left.loc,
-              "This expression is not numeric or boolean.",
-            ),
+            `The type "${leftType.type}" does not support equality comparison.`,
+            annotate(node.left.loc, "Unexpected type."),
           );
         }
         this.expectType(node.right, leftType, scope);

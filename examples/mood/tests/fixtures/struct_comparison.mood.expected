@@ -1,5 +1,5 @@
-Error: TODO: Implement enum equality
-    at WasmEmitter.emit (/Users/captbaritone/projects/wasm-compiler/examples/mood/WasmEmitter.ts:262:23)
+Error: TODO: Implement struct equality
+    at WasmEmitter.emit (/Users/captbaritone/projects/wasm-compiler/examples/mood/WasmEmitter.ts:260:23)
     at WasmEmitter.emit (/Users/captbaritone/projects/wasm-compiler/examples/mood/WasmEmitter.ts:134:16)
     at cb (/Users/captbaritone/projects/wasm-compiler/examples/mood/WasmEmitter.ts:117:16)
     at ModuleContext.declareFunction (/Users/captbaritone/projects/wasm-compiler/index.ts:69:5)

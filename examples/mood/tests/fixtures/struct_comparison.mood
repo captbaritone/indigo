@@ -1,0 +1,7 @@
+struct Foo {
+  bar: i32
+}
+
+pub fn test(): bool {
+    Foo { bar: 10_i32 } == Foo { bar: 10_i32 }
+}

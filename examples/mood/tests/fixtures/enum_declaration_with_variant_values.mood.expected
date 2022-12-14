@@ -1,8 +1,8 @@
 Error: TODO: Support enum variants with values
-    at findIndex (/Users/captbaritone/projects/wasm-compiler/examples/mood/WasmEmitter.ts:285:19)
+    at findIndex (/Users/captbaritone/projects/wasm-compiler/examples/mood/WasmEmitter.ts:288:19)
     at Array.findIndex (<anonymous>)
-    at WasmEmitter.emit (/Users/captbaritone/projects/wasm-compiler/examples/mood/WasmEmitter.ts:283:50)
-    at WasmEmitter.emit (/Users/captbaritone/projects/wasm-compiler/examples/mood/WasmEmitter.ts:298:14)
+    at WasmEmitter.emit (/Users/captbaritone/projects/wasm-compiler/examples/mood/WasmEmitter.ts:286:50)
+    at WasmEmitter.emit (/Users/captbaritone/projects/wasm-compiler/examples/mood/WasmEmitter.ts:310:14)
     at WasmEmitter.emit (/Users/captbaritone/projects/wasm-compiler/examples/mood/WasmEmitter.ts:134:16)
     at cb (/Users/captbaritone/projects/wasm-compiler/examples/mood/WasmEmitter.ts:117:16)
     at ModuleContext.declareFunction (/Users/captbaritone/projects/wasm-compiler/index.ts:69:5)

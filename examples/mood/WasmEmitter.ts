@@ -251,12 +251,15 @@ export class WasmEmitter {
             switch (leftType) {
               case "i32":
               case "bool":
-              case "enum":
                 this.exp.i32Eq();
                 break;
               case "f64":
                 this.exp.f64Eq();
                 break;
+              case "struct":
+                throw new Error("TODO: Implement struct equality");
+              case "enum":
+                throw new Error("TODO: Implement enum equality");
               default:
                 throw new Error(
                   `Equality comparison is not supported for the type: ${ast.left.type}`,
@@ -287,7 +290,16 @@ export class WasmEmitter {
           return variant.name === ast.tail.name;
         });
         // TODO: Support enum variants with values
-        // For now we'll represent enum variants as i32s of their index.
+        // For now we'll represent enum variants as i32s of their index allocated on the heap.
+        /*
+        this.exp.i32Const(4); // Size of an i32 variantIndex
+        this.exp.call(this._mallocIndex);
+        this.exp.globalGet(this._heapPointerIndex);
+        this.exp.globalGet(this._heapPointerIndex);
+        this.exp.i32Const(variantIndex);
+        this.exp.i32Store(0, 0);
+        */
+
         this.exp.i32Const(variantIndex);
         break;
       }
