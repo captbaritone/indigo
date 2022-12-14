@@ -4,7 +4,7 @@ import {
   Program,
   EnumDeclaration,
   Identifier,
-  Variant,
+  VariantDeclaration,
   FunctionDeclaration,
   BlockExpression,
   Parameter,
@@ -334,7 +334,10 @@ class Parser {
   // ExpressionPath ::= Identifier "::" Identifier
   parseExpressionPath(head: Identifier): ExpressionPath {
     this.expect("::");
-    const tail = this.parseIdentifier();
+    let tail: Identifier | CallExpression = this.parseIdentifier();
+    if (this.peek().type === "(") {
+      tail = this.parseCallExpression(tail);
+    }
     return {
       type: "ExpressionPath",
       head,
@@ -499,11 +502,11 @@ class Parser {
     };
   }
 
-  // VariantList ::= Variant ("," Variant)*
-  parseVariantList(): Variant[] {
-    const variants: Variant[] = [];
+  // VariantList ::= VariantDeclaration ("," VariantDeclaration)*
+  parseVariantList(): VariantDeclaration[] {
+    const variants: VariantDeclaration[] = [];
     while (this.peek().type !== "}" && this.peek().type !== "EOF") {
-      variants.push(this.parseVariant());
+      variants.push(this.parseVariantDeclaration());
       if (this.peek().type === ",") {
         this.next();
       }
@@ -511,12 +514,20 @@ class Parser {
     return variants;
   }
 
-  // Variant ::= Identifier
-  parseVariant(): Variant {
+  // Variant ::= Identifier ("(" Identifier ")")?
+  parseVariantDeclaration(): VariantDeclaration {
     const start = this.nextLoc();
+    const id = this.parseIdentifier();
+    let valueType: Identifier | null = null;
+    if (this.peek().type === "(") {
+      this.next();
+      valueType = this.parseIdentifier();
+      this.expect(")");
+    }
     return {
       type: "Variant",
-      id: this.parseIdentifier(),
+      id,
+      valueType,
       loc: this.locToPrev(start),
     };
   }

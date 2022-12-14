@@ -1,0 +1,7 @@
+Error: Variant "Some" is not a unit variant. Expected a value of type "i32".:
+ --> enum_declaration_with_variant_value_missing_value.mood:7:28
+
+  | pub fn test(): i32 {
+7 |   let x: Maybe = Maybe::Some;
+  |                            ^ Expected a value here.
+  |   10_i32

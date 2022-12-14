@@ -1,0 +1,7 @@
+Error: Variant "Some" is not a unit variant. Expected a single value argument, but got 2.:
+ --> enum_construction_multiple_values.mood:7:38
+
+  | pub fn test(): i32 {
+7 |   let x: Maybe = Maybe::Some(10_i32, 20_i32);
+  |                                      ^^^^^^ Unexpected value.
+  |   10_i32

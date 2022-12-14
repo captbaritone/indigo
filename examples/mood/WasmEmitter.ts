@@ -281,7 +281,7 @@ export class WasmEmitter {
           throw new Error("Expected enum type");
         }
         const variantIndex = enumSymbol.variants.findIndex((variant) => {
-          if (variant.valueType != null) {
+          if (variant.valueType != null || ast.tail.type === "CallExpression") {
             throw new Error("TODO: Support enum variants with values");
           }
           return variant.name === ast.tail.name;

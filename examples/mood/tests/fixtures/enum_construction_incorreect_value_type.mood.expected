@@ -1,0 +1,7 @@
+Error: Expected "i32", got "f64":
+ --> enum_construction_incorreect_value_type.mood:7:30
+
+  | pub fn test(): i32 {
+7 |   let x: Maybe = Maybe::Some(10_f64);
+  |                              ^^^^^^ Expected "i32".
+  |   10_i32

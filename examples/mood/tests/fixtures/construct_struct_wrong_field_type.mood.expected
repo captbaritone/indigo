@@ -3,5 +3,5 @@ Error: Expected "i32", got "f64":
 
   | pub fn test(): i32 {
 7 |     Foo { a: 1_i32, b: 1_f64 };
-  |                        ^^^^^ This expression has the wrong type.
+  |                        ^^^^^ Expected "i32".
   |     0_i32

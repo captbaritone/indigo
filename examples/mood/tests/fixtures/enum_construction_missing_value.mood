@@ -1,0 +1,9 @@
+enum Maybe {
+  Some(i32),
+  None
+}
+
+pub fn test(): i32 {
+  let x: Maybe = Maybe::Some();
+  10_i32
+}

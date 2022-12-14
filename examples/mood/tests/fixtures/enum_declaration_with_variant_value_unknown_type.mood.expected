@@ -1,0 +1,7 @@
+Error: Unknown type: oops:
+ --> enum_declaration_with_variant_value_unknown_type.mood:2:8
+
+  | enum Maybe {
+2 |   Some(oops),
+  |        ^^^^ This type is not defined.
+  |   None

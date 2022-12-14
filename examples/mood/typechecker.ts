@@ -14,6 +14,7 @@ import {
   StructDeclaration,
   TypeAnnotation,
   VariableDeclaration,
+  VariantDeclaration,
 } from "./ast";
 import { lastChar, union } from "./Location";
 import DiagnosticError, { annotate } from "./DiagnosticError";
@@ -66,22 +67,22 @@ class TypeChecker {
         return this.typeAstNode(node.typeId, paramType);
       }
       case "StructConstruction": {
-        return this.tcStructConstruction(scope, node);
+        return this.tcStructConstruction(node, scope);
       }
       case "BlockExpression": {
         return this.tcBlockExpression(node, scope);
       }
       case "EnumDeclaration": {
-        return this.tcEnumDeclaration(scope, node);
+        return this.tcEnumDeclaration(node, scope);
       }
       case "Identifier": {
-        return this.tcIdentifier(scope, node);
+        return this.tcIdentifier(node, scope);
       }
       case "CallExpression": {
-        return this.tcCallExpression(scope, node);
+        return this.tcCallExpression(node, scope);
       }
       case "ExpressionPath": {
-        return this.tcExpressionPath(scope, node);
+        return this.tcExpressionPath(node, scope);
       }
       case "Literal": {
         return this.tcLiteral(node, scope);
@@ -98,10 +99,7 @@ class TypeChecker {
     }
   }
 
-  private tcMemberExpression(
-    node: MemberExpression,
-    scope: SymbolTable,
-  ): SymbolType {
+  tcMemberExpression(node: MemberExpression, scope: SymbolTable): SymbolType {
     const head = this.tc(node.head, scope);
     if (head.type !== "struct") {
       throw new DiagnosticError(
@@ -119,14 +117,14 @@ class TypeChecker {
     return this.typeAstNode(node.typeId, tail.valueType);
   }
 
-  private tcVariableDeclaration(node: VariableDeclaration, scope: SymbolTable) {
+  tcVariableDeclaration(node: VariableDeclaration, scope: SymbolTable) {
     const type = this.fromAnnotation(node.annotation, scope);
     this.expectType(node.value, type, scope);
     scope.define(node.name.name, type);
     return this.typeAstNode(node.typeId, type);
   }
 
-  private tcLiteral(node: Literal, scope: SymbolTable) {
+  tcLiteral(node: Literal, scope: SymbolTable) {
     const type =
       typeof node.value === "boolean"
         ? ({ type: "bool" } as const)
@@ -135,7 +133,7 @@ class TypeChecker {
     return this.typeAstNode(node.typeId, type);
   }
 
-  private tcExpressionPath(scope: SymbolTable, node: ExpressionPath) {
+  tcExpressionPath(node: ExpressionPath, scope: SymbolTable) {
     const type = scope.lookup(node.head.name);
     if (type == null) {
       throw new DiagnosticError(
@@ -151,20 +149,73 @@ class TypeChecker {
       );
     }
 
-    const variant = type.variants.find((v) => v.name === node.tail.name);
-    if (variant == null) {
-      throw new DiagnosticError(
-        `Undefined variant "${node.tail.name}"`,
-        annotate(
-          node.tail.loc,
-          `"${node.tail.name}" is not a variant of "${node.head.name}".`,
-        ),
-      );
+    const tail = node.tail;
+
+    switch (tail.type) {
+      case "Identifier":
+        {
+          const variant = type.variants.find((v) => v.name === tail.name);
+          if (variant == null) {
+            throw new DiagnosticError(
+              `Undefined variant "${tail.name}"`,
+              annotate(
+                tail.loc,
+                `"${tail.name}" is not a variant of "${node.head.name}".`,
+              ),
+            );
+          }
+          if (variant.valueType != null) {
+            throw new DiagnosticError(
+              `Variant "${tail.name}" is not a unit variant. Expected a value of type "${variant.valueType.type}".`,
+              annotate(lastChar(tail.loc), `Expected a value here.`),
+            );
+          }
+        }
+        break;
+      case "CallExpression": {
+        const variant = type.variants.find((v) => v.name === tail.callee.name);
+        if (variant == null) {
+          throw new DiagnosticError(
+            `Undefined variant "${tail.callee.name}"`,
+            annotate(
+              tail.loc,
+              `"${tail.callee.name}" is not a variant of "${node.head.name}".`,
+            ),
+          );
+        }
+        if (tail.args.length === 0) {
+          throw new DiagnosticError(
+            `Variant "${tail.callee.name}" is not a unit variant. Expected a value argument.`,
+            annotate(lastChar(tail.loc), `Expected a value here.`),
+          );
+        }
+        if (tail.args.length > 1) {
+          const excessiveArgs = tail.args.slice(1);
+          const first = excessiveArgs[0];
+          const last = excessiveArgs[excessiveArgs.length - 1];
+          throw new DiagnosticError(
+            `Variant "${tail.callee.name}" is not a unit variant. Expected a single value argument, but got ${tail.args.length}.`,
+            annotate(
+              union(first.loc, last.loc),
+              `Unexpected ${excessiveArgs.length > 1 ? "values" : "value"}.`,
+            ),
+          );
+        }
+        const arg = tail.args[0];
+        this.typeAstNode(
+          arg.typeId,
+          this.expectType(arg, variant.valueType!, scope),
+        );
+        break;
+      }
+      default:
+        // @ts-ignore
+        throw new Error("Unexpected tail type: " + tail.type);
     }
     return this.typeAstNode(node.typeId, type);
   }
 
-  private tcCallExpression(scope: SymbolTable, node: CallExpression) {
+  tcCallExpression(node: CallExpression, scope: SymbolTable) {
     const func = scope.lookup(node.callee.name);
     if (func == null) {
       throw new DiagnosticError(
@@ -210,7 +261,7 @@ class TypeChecker {
     return this.typeAstNode(node.typeId, func.result);
   }
 
-  private tcIdentifier(scope: SymbolTable, node: Identifier) {
+  tcIdentifier(node: Identifier, scope: SymbolTable) {
     const type = scope.lookup(node.name);
     if (type == null) {
       throw new DiagnosticError(
@@ -221,26 +272,30 @@ class TypeChecker {
     return this.typeAstNode(node.typeId, type);
   }
 
-  private tcEnumDeclaration(
-    scope: SymbolTable,
-    node: EnumDeclaration,
-  ): SymbolType {
+  tcEnumDeclaration(node: EnumDeclaration, scope: SymbolTable): SymbolType {
     scope.define(node.id.name, {
       type: "enum",
       name: node.id.name,
       variants: node.variants.map((variant) => ({
         name: variant.id.name,
-        valueType: null,
+        valueType: this.tcVariantDeclarationValue(variant, scope),
       })),
     });
     // A declaration has no type itself.
     return { type: "empty" };
   }
 
-  private tcBlockExpression(
-    node: BlockExpression,
+  tcVariantDeclarationValue(
+    variant: VariantDeclaration,
     scope: SymbolTable,
-  ): SymbolType {
+  ): SymbolType | null {
+    if (variant.valueType != null) {
+      return this.fromAnnotation(variant.valueType, scope);
+    }
+    return null;
+  }
+
+  tcBlockExpression(node: BlockExpression, scope: SymbolTable): SymbolType {
     let lastType: SymbolType = { type: "empty" };
     for (const child of node.expressions) {
       lastType = this.tc(child, scope);
@@ -248,9 +303,9 @@ class TypeChecker {
     return lastType;
   }
 
-  private tcStructConstruction(
-    scope: SymbolTable,
+  tcStructConstruction(
     node: StructConstruction,
+    scope: SymbolTable,
   ): SymbolType {
     const struct = scope.lookup(node.id.name);
     // Undefined
@@ -305,10 +360,7 @@ class TypeChecker {
     return this.typeAstNode(node.typeId, struct);
   }
 
-  private tcStructDeclaration(
-    node: StructDeclaration,
-    scope: SymbolTable,
-  ): SymbolType {
+  tcStructDeclaration(node: StructDeclaration, scope: SymbolTable): SymbolType {
     const fields: { name: string; valueType: SymbolType }[] = [];
     for (const field of node.fields) {
       const fieldType = this.fromAnnotation(field.annotation, scope);
@@ -319,7 +371,7 @@ class TypeChecker {
     return { type: "empty" };
   }
 
-  private tcFunctionDeclaration(
+  tcFunctionDeclaration(
     scope: SymbolTable,
     node: FunctionDeclaration,
   ): SymbolType {
@@ -344,10 +396,7 @@ class TypeChecker {
     return { type: "empty" };
   }
 
-  private tcBinaryExpression(
-    node: BinaryExpression,
-    scope: SymbolTable,
-  ): SymbolType {
+  tcBinaryExpression(node: BinaryExpression, scope: SymbolTable): SymbolType {
     const leftType = this.tc(node.left, scope);
     switch (node.operator) {
       case "*":
@@ -384,7 +433,7 @@ class TypeChecker {
     }
   }
 
-  private tcProgram(node: Program, scope: SymbolTable) {
+  tcProgram(node: Program, scope: SymbolTable) {
     let lastType: SymbolType = { type: "empty" };
     for (const child of node.body) {
       lastType = this.tc(child, scope);
@@ -409,7 +458,7 @@ class TypeChecker {
       }
       throw new DiagnosticError(
         `Expected "${type.type}", got "${actual.type}"`,
-        annotate(node.loc, "This expression has the wrong type."),
+        annotate(node.loc, `Expected "${type.type}".`),
       );
     }
     if (actual.type === "function") {

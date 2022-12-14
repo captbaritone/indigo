@@ -1,4 +1,3 @@
-import { TypePredicateKind } from "typescript";
 import { Location } from "./Location";
 
 export type AstNode = Program | Declaration | Expression | Parameter;
@@ -58,13 +57,14 @@ export type BlockExpression = {
 export type EnumDeclaration = {
   type: "EnumDeclaration";
   id: Identifier;
-  variants: Variant[];
+  variants: VariantDeclaration[];
   loc: Location;
 };
 
-export type Variant = {
+export type VariantDeclaration = {
   type: "Variant";
   id: Identifier;
+  valueType: TypeAnnotation | null;
   loc: Location;
 };
 
@@ -134,7 +134,7 @@ export type CallExpression = {
 export type ExpressionPath = {
   type: "ExpressionPath";
   head: Identifier;
-  tail: Identifier;
+  tail: Identifier | CallExpression;
   loc: Location;
   typeId: number;
 };
