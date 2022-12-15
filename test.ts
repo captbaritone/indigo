@@ -37,6 +37,24 @@ test("Add", async (t) => {
   assert.equal(instance.exports.add(1, 2), 3);
 });
 
+test("Global export with multiple returns", async (t) => {
+  const context = new ModuleContext();
+
+  const signature = {
+    params: [NumType.I32, NumType.I32],
+    results: [NumType.I32, NumType.I32],
+    exportName: "echoTwice",
+  };
+  context.declareFunction(signature, ({ exp }) => {
+    exp.localGet(0);
+    exp.localGet(1);
+  });
+
+  const instance = await context.getInstance();
+  // @ts-ignore
+  assert.deepEqual(instance.exports.echoTwice(1, 2), [1, 2]);
+});
+
 test("Function call", async (t) => {
   const context = new ModuleContext();
   const functionIndex = context.declareFunction(
@@ -90,7 +108,25 @@ test("Global", async (t) => {
 });
 
 test("Tiny compiler", async () => {
-  const ctx = new ModuleContext();
+  // A tiny compiler
+  function compile(exp: ExpressionContext, node: any) {
+    switch (node.type) {
+      case "num":
+        exp.i32Const(node.value);
+        break;
+      case "add":
+        compile(exp, node.left);
+        compile(exp, node.right);
+        exp.i32Add();
+        break;
+      case "sub":
+        compile(exp, node.left);
+        compile(exp, node.right);
+        exp.i32Sub();
+        break;
+    }
+  }
+
   const ast = {
     type: "add",
     left: { type: "num", value: 6 },
@@ -100,38 +136,15 @@ test("Tiny compiler", async () => {
       right: { type: "num", value: 12 },
     },
   };
-  const functionIndex = ctx.declareFunction(
+
+  const ctx = new ModuleContext();
+
+  ctx.declareFunction(
     { params: [], results: [NumType.I32], exportName: "run" },
-    ({ exp }) => {
-      compile(exp, ast);
-    },
+    ({ exp }) => compile(exp, ast),
   );
 
   const instance = await ctx.getInstance();
   // @ts-ignore
   assert.equal(instance.exports.run(), 4);
 });
-
-// A tiny compiler
-function compile(exp: ExpressionContext, node: any) {
-  switch (node.type) {
-    case "num":
-      // @ts-ignore
-      exp.i32Const(node.value);
-      break;
-    case "add":
-      compile(exp, node.left);
-      compile(exp, node.right);
-      // @ts-ignore
-      exp.i32Add();
-      break;
-    case "sub":
-      compile(exp, node.left);
-      compile(exp, node.right);
-      // @ts-ignore
-      exp.i32Sub();
-      break;
-    default:
-      throw new Error(`Unknown node type: ${node.type}`);
-  }
-}
