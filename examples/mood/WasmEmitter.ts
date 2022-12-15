@@ -108,9 +108,13 @@ export class WasmEmitter {
           locals.set(param.name.name, i);
         }
 
-        const results = [this.lookupAstNodeNumType(ast.returnType.typeId)];
+        const signature = {
+          params,
+          results: [this.lookupAstNodeNumType(ast.returnType.typeId)],
+          exportName: ast.public ? name : null,
+        };
 
-        const index = this.ctx.declareFunction({ params, results }, (func) => {
+        const index = this.ctx.declareFunction(signature, (func) => {
           this._locals = locals;
           this.exp = func.exp;
           this.func = func;
@@ -119,10 +123,6 @@ export class WasmEmitter {
 
         // TODO: This won't be compatible with recursive functions.
         this.defineFunction(name, index);
-
-        if (ast.public) {
-          this.ctx.exportFunction(name, index);
-        }
 
         break;
       }

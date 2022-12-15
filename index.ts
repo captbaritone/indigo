@@ -18,6 +18,7 @@ import * as Encoding from "./encoding";
 type FunctionDeclaration = {
   params: ValType[];
   results: ValType[];
+  exportName?: string | null;
 };
 
 /**
@@ -64,23 +65,24 @@ export class ModuleContext {
       functionContext.getFuncType(),
     );
 
+    // TODO: What about export order? I think exports need to come first?
+    if (func.exportName != null) {
+      this._exports.push({
+        name: func.exportName,
+        exportDesc: ExportDesc.FUNC_IDX,
+        index: nextFuncIndex,
+      });
+    }
+
     this._functions.push(funcTypeIndex);
     this._code.push(functionContext);
     cb(functionContext);
     return nextFuncIndex;
   }
 
-  // TODO: What about export order? I think exports need to come first?
-  exportFunction(name: string, index: number): void {
-    this._exports.push({
-      name,
-      exportDesc: ExportDesc.FUNC_IDX,
-      index,
-    });
-  }
-
   declareGlobal(
     type: GlobalType,
+    // TODO: exportName?
     cb: (ctx: ExpressionContext) => void,
   ): number {
     const index = this._globals.length;

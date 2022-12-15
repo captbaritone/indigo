@@ -6,13 +6,12 @@ import { Mut, NumType } from "./types";
 
 test("Echo", async (t) => {
   const context = new ModuleContext();
-  const funcIndex = context.declareFunction(
-    { params: [NumType.I32], results: [NumType.I32] },
+  context.declareFunction(
+    { params: [NumType.I32], results: [NumType.I32], exportName: "echo" },
     (func) => {
       func.exp.localGet(0);
     },
   );
-  context.exportFunction("echo", funcIndex);
 
   const instance = await context.getInstance();
   // @ts-ignore
@@ -21,15 +20,17 @@ test("Echo", async (t) => {
 
 test("Add", async (t) => {
   const context = new ModuleContext();
-  const funcIndex = context.declareFunction(
-    { params: [NumType.I32, NumType.I32], results: [NumType.I32] },
-    ({ exp }) => {
-      exp.localGet(0);
-      exp.localGet(1);
-      exp.i32Add();
-    },
-  );
-  context.exportFunction("add", funcIndex);
+
+  const signature = {
+    params: [NumType.I32, NumType.I32],
+    results: [NumType.I32],
+    exportName: "add",
+  };
+  context.declareFunction(signature, ({ exp }) => {
+    exp.localGet(0);
+    exp.localGet(1);
+    exp.i32Add();
+  });
 
   const instance = await context.getInstance();
   // @ts-ignore
@@ -45,16 +46,17 @@ test("Function call", async (t) => {
     },
   );
 
-  const otherFunctionIndex = context.declareFunction(
-    { params: [NumType.I32, NumType.I32], results: [NumType.I32] },
-    ({ exp }) => {
-      exp.call(functionIndex);
-      exp.call(functionIndex);
-      exp.i32Add();
-    },
-  );
+  const signature = {
+    params: [NumType.I32, NumType.I32],
+    results: [NumType.I32],
+    exportName: "twenty",
+  };
 
-  context.exportFunction("twenty", otherFunctionIndex);
+  context.declareFunction(signature, ({ exp }) => {
+    exp.call(functionIndex);
+    exp.call(functionIndex);
+    exp.i32Add();
+  });
 
   const instance = await context.getInstance();
   // @ts-ignore
@@ -69,8 +71,8 @@ test("Global", async (t) => {
       init.i32Const(1);
     },
   );
-  const getGIndex = context.declareFunction(
-    { params: [], results: [NumType.I32] },
+  context.declareFunction(
+    { params: [], results: [NumType.I32], exportName: "getG" },
     ({ exp }) => {
       exp.globalGet(globalIndex);
       exp.i32Const(1);
@@ -79,7 +81,6 @@ test("Global", async (t) => {
       exp.globalGet(globalIndex);
     },
   );
-  context.exportFunction("getG", getGIndex);
 
   const instance = await context.getInstance();
   // @ts-ignore
@@ -100,13 +101,11 @@ test("Tiny compiler", async () => {
     },
   };
   const functionIndex = ctx.declareFunction(
-    { params: [], results: [NumType.I32] },
+    { params: [], results: [NumType.I32], exportName: "run" },
     ({ exp }) => {
       compile(exp, ast);
     },
   );
-
-  ctx.exportFunction("run", functionIndex);
 
   const instance = await ctx.getInstance();
   // @ts-ignore
