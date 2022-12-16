@@ -49,7 +49,7 @@ export function parse(code: string): AstNode {
 class Parser {
   _tokens: Token[];
   _nextIndex: number;
-  _nextTypeId: number = 0;
+  _nextNodeId: number = 0;
   constructor(tokens: Token[]) {
     this._tokens = tokens;
     this._nextIndex = 0;
@@ -159,6 +159,7 @@ class Parser {
       loc: this.locToPrev(start),
       public: pub,
       returnType,
+      nodeId: this.nextNodeId(),
     };
   }
 
@@ -185,7 +186,7 @@ class Parser {
       name,
       annotation,
       loc: this.locToPrev(start),
-      typeId: this.nextTypeId(),
+      nodeId: this.nextNodeId(),
     };
   }
 
@@ -205,7 +206,7 @@ class Parser {
       type: "BlockExpression",
       expressions,
       loc: this.locToPrev(start),
-      typeId: this.nextTypeId(),
+      nodeId: this.nextNodeId(),
     };
   }
 
@@ -278,7 +279,7 @@ class Parser {
       id,
       fields,
       loc: this.locToPrev(id.loc),
-      typeId: this.nextTypeId(),
+      nodeId: this.nextNodeId(),
     };
   }
 
@@ -293,7 +294,7 @@ class Parser {
       name,
       value,
       loc: this.locToPrev(start),
-      typeId: this.nextTypeId(),
+      nodeId: this.nextNodeId(),
     };
   }
 
@@ -305,7 +306,7 @@ class Parser {
       callee: callee,
       args,
       loc: union(callee.loc, this.prevLoc()),
-      typeId: this.nextTypeId(),
+      nodeId: this.nextNodeId(),
     };
   }
 
@@ -343,7 +344,7 @@ class Parser {
       head,
       tail,
       loc: union(head.loc, tail.loc),
-      typeId: this.nextTypeId(),
+      nodeId: this.nextNodeId(),
     };
   }
 
@@ -355,7 +356,7 @@ class Parser {
       head,
       tail,
       loc: union(head.loc, tail.loc),
-      typeId: this.nextTypeId(),
+      nodeId: this.nextNodeId(),
     };
   }
 
@@ -378,7 +379,7 @@ class Parser {
       value,
       annotation,
       loc: this.locToPrev(start),
-      typeId: this.nextTypeId(),
+      nodeId: this.nextNodeId(),
     };
   }
 
@@ -394,14 +395,14 @@ class Parser {
         value,
         annotation,
         loc: this.locToPrev(start),
-        typeId: this.nextTypeId(),
+        nodeId: this.nextNodeId(),
       };
     } else if (next.type === "Identifier") {
       const annotation = {
         type: "Identifier",
         name: "bool",
         loc: next.loc,
-        typeId: this.nextTypeId(),
+        nodeId: this.nextNodeId(),
       } as const;
       if (next.value === "true") {
         this.next();
@@ -410,7 +411,7 @@ class Parser {
           value: true,
           annotation,
           loc: this.locToPrev(start),
-          typeId: this.nextTypeId(),
+          nodeId: this.nextNodeId(),
         };
       } else if (next.value === "false") {
         this.next();
@@ -419,7 +420,7 @@ class Parser {
           value: false,
           annotation,
           loc: this.locToPrev(start),
-          typeId: this.nextTypeId(),
+          nodeId: this.nextNodeId(),
         };
       }
     }
@@ -464,7 +465,7 @@ class Parser {
       operator,
       right,
       loc: union(left.loc, right.loc),
-      typeId: this.nextTypeId(),
+      nodeId: this.nextNodeId(),
     };
   }
 
@@ -539,7 +540,7 @@ class Parser {
       type: "Identifier",
       name: token.value,
       loc: token.loc,
-      typeId: this.nextTypeId(),
+      nodeId: this.nextNodeId(),
     };
   }
 
@@ -576,8 +577,8 @@ class Parser {
     return union(start, this.prevLoc());
   }
 
-  nextTypeId() {
-    return this._nextTypeId++;
+  nextNodeId() {
+    return this._nextNodeId++;
   }
 }
 

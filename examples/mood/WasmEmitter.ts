@@ -1,14 +1,20 @@
 import { ExpressionContext, FunctionContext, ModuleContext } from "../..";
 import { NumType, Mut } from "../../types";
-import { AstNode } from "./ast";
+import { AstNode, FunctionDeclaration } from "./ast";
 import { SymbolType } from "./SymbolTable";
 import TypeTable from "./TypeTable";
+import { StackSizes } from "./MemoryLayout";
 
 /**
  * Populates the ModuleContext with the program defined by AstNode.
  */
-export function emit(ctx: ModuleContext, ast: AstNode, typeTable: TypeTable) {
-  const emitter = new WasmEmitter(ctx, typeTable);
+export function emit(
+  ctx: ModuleContext,
+  ast: AstNode,
+  typeTable: TypeTable,
+  stackSizes: StackSizes,
+) {
+  const emitter = new WasmEmitter(ctx, typeTable, stackSizes);
   emitter.emit(ast);
 }
 
@@ -17,14 +23,21 @@ export class WasmEmitter {
   func: FunctionContext;
   exp: ExpressionContext;
   _typeTable: TypeTable;
+  _stackSizes: StackSizes;
   _globals: Map<string, number> = new Map();
   _functions: Map<string, number> = new Map();
   _mallocIndex: number;
   _heapPointerIndex: number;
+  sp: number; // Stack base pointer
   _locals: Map<string, number>;
-  constructor(ctx: ModuleContext, typeTable: TypeTable) {
+  constructor(
+    ctx: ModuleContext,
+    typeTable: TypeTable,
+    stackSizes: StackSizes,
+  ) {
     this.ctx = ctx;
     this._typeTable = typeTable;
+    this._stackSizes = stackSizes;
     // Start allocation with one page.
     // We don't set a max memory size.
     this.ctx.defineMemory({ min: 1 });
@@ -33,6 +46,9 @@ export class WasmEmitter {
 
   _defineBuiltins() {
     const i32Mut = { type: NumType.I32, mut: Mut.VAR };
+    this.sp = this.ctx.declareGlobal(i32Mut, (init) => {
+      init.i32Const(0);
+    });
     this._heapPointerIndex = this.ctx.declareGlobal(i32Mut, (init) => {
       init.i32Const(0);
     });
@@ -90,6 +106,46 @@ export class WasmEmitter {
     );
   }
 
+  // Responsible for setting the stack pointer to the base of the stack frame.
+  // Also pushes the previous stack pointer onto the stack which will be
+  // consumed by the postlude.
+  emitPrelude(ast: FunctionDeclaration, func: FunctionContext) {
+    const stackSize = this._stackSizes.get(ast.nodeId);
+    if (stackSize == null) {
+      throw new Error(`Missing stack size for function ${ast.id.name}`);
+    }
+    // Save the previous function's base stack pointer.
+    // This will stay on the stack until the postlude.
+    func.exp.globalGet(this.sp);
+
+    // Update the base stack pointer for our stack frame.
+    func.exp.globalGet(this.sp);
+    func.exp.i32Const(stackSize);
+    func.exp.i32Sub();
+    // It looks to me like C uses a local for the current frame's stack pointer.
+    // Maybe that's more efficient?
+    func.exp.globalSet(this.sp);
+  }
+
+  emitPostlude(ast: FunctionDeclaration, func: FunctionContext) {
+    const resultTypes = func.getResults();
+    if (resultTypes.length > 1) {
+      throw new Error("We don't support multiple return types");
+    }
+    if (resultTypes.length === 0) {
+      // Reset the stack pointer to the previous frame's base pointer.
+      func.exp.globalSet(this.sp);
+    } else {
+      // Define a local for temporarily placing the return value in.
+      // Note: As an optimization we could use the first param as the return local
+      // if the types match.
+      const index = func.defineLocal(resultTypes[0]);
+      func.exp.localSet(index);
+      func.exp.globalSet(this.sp);
+      func.exp.localGet(index);
+    }
+  }
+
   emit(ast: AstNode) {
     switch (ast.type) {
       case "Program": {
@@ -104,21 +160,23 @@ export class WasmEmitter {
 
         const params: NumType[] = [];
         for (const [i, param] of ast.params.entries()) {
-          params.push(this.lookupAstNodeNumType(param.typeId));
+          params.push(this.lookupAstNodeNumType(param.nodeId));
           locals.set(param.name.name, i);
         }
 
         const signature = {
           params,
-          results: [this.lookupAstNodeNumType(ast.returnType.typeId)],
+          results: [this.lookupAstNodeNumType(ast.returnType.nodeId)],
           exportName: ast.public ? name : null,
         };
 
         const index = this.ctx.declareFunction(signature, (func) => {
+          this.emitPrelude(ast, func);
           this._locals = locals;
           this.exp = func.exp;
           this.func = func;
           this.emit(ast.body);
+          this.emitPostlude(ast, func);
         });
 
         // TODO: This won't be compatible with recursive functions.
@@ -146,7 +204,7 @@ export class WasmEmitter {
       }
       case "StructConstruction": {
         // Compute struct size
-        const structType = this.lookupAstNode(ast.typeId);
+        const structType = this.lookupAstNode(ast.nodeId);
         if (structType.type !== "struct") {
           throw new Error("Expected struct type");
         }
@@ -200,7 +258,7 @@ export class WasmEmitter {
       }
       case "MemberExpression": {
         this.emit(ast.head);
-        const struct = this.lookupAstNode(ast.head.typeId);
+        const struct = this.lookupAstNode(ast.head.nodeId);
         if (struct.type !== "struct") {
           throw new Error("Expected struct type");
         }
@@ -217,7 +275,7 @@ export class WasmEmitter {
       case "BinaryExpression": {
         this.emit(ast.left);
         this.emit(ast.right);
-        const leftType = this.lookupAstNode(ast.left.typeId).type;
+        const leftType = this.lookupAstNode(ast.left.nodeId).type;
         switch (ast.operator) {
           case "+":
             switch (leftType) {
@@ -279,7 +337,7 @@ export class WasmEmitter {
         break;
       }
       case "ExpressionPath": {
-        const enumSymbol = this.lookupAstNode(ast.typeId);
+        const enumSymbol = this.lookupAstNode(ast.nodeId);
         if (enumSymbol.type !== "enum") {
           throw new Error("Expected enum type");
         }
@@ -304,7 +362,7 @@ export class WasmEmitter {
         break;
       }
       case "VariableDeclaration": {
-        const type = this.lookupAstNodeNumType(ast.typeId);
+        const type = this.lookupAstNodeNumType(ast.nodeId);
         const index = this.func.defineLocal(type);
         this.defineLocal(ast.name.name, index);
         this.emit(ast.value);
@@ -316,7 +374,7 @@ export class WasmEmitter {
         break;
       }
       case "Literal": {
-        const type = this.lookupAstNodeNumType(ast.typeId);
+        const type = this.lookupAstNodeNumType(ast.nodeId);
         if (typeof ast.value === "boolean") {
           this.exp.i32Const(ast.value ? 1 : 0);
         } else if (typeof ast.value === "number") {

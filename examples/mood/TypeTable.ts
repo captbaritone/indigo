@@ -1,7 +1,7 @@
 import { SymbolType } from "./SymbolTable";
 
 /**
- * Some AST nodes include a `typeId` field which is a unique identifiers for the
+ * Some AST nodes include a `nodeId` field which is a unique identifiers for the
  * node. Typechecking populates a TypeTable with the type of each such AST node.
  *
  * Note that this is different than the SymbolTable, which tracks scope and only
@@ -14,14 +14,14 @@ import { SymbolType } from "./SymbolTable";
 export default class TypeTable {
   _astNodes: SymbolType[] = [];
 
-  define(typeId: number, type: SymbolType): SymbolType {
-    this._astNodes[typeId] = type;
+  define(nodeId: number, type: SymbolType): SymbolType {
+    this._astNodes[nodeId] = type;
     return type;
   }
-  lookup(typeId: number): SymbolType {
-    const type = this._astNodes[typeId];
+  lookup(nodeId: number): SymbolType {
+    const type = this._astNodes[nodeId];
     if (type == null) {
-      throw new Error(`No type for AST node ${typeId}`);
+      throw new Error(`No type for AST node ${nodeId}`);
     }
     return type;
   }

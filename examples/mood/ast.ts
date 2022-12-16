@@ -31,6 +31,7 @@ export type FunctionDeclaration = {
   body: BlockExpression;
   returnType: TypeAnnotation;
   loc: Location;
+  nodeId: number;
 };
 
 export type StructDeclaration = {
@@ -51,7 +52,7 @@ export type BlockExpression = {
   type: "BlockExpression";
   expressions: Expression[];
   loc: Location;
-  typeId: number;
+  nodeId: number;
 };
 
 export type EnumDeclaration = {
@@ -73,7 +74,7 @@ export type Parameter = {
   name: Identifier;
   annotation: TypeAnnotation;
   loc: Location;
-  typeId: number;
+  nodeId: number;
 };
 
 export type NumericType = {
@@ -86,7 +87,7 @@ export type StructConstruction = {
   id: Identifier;
   fields: StructFieldConstruction[];
   loc: Location;
-  typeId: number;
+  nodeId: number;
 };
 
 export type StructFieldConstruction = {
@@ -94,7 +95,7 @@ export type StructFieldConstruction = {
   name: Identifier;
   value: Expression;
   loc: Location;
-  typeId: number;
+  nodeId: number;
 };
 
 export type VariableDeclaration = {
@@ -103,7 +104,7 @@ export type VariableDeclaration = {
   value: Expression;
   annotation: TypeAnnotation;
   loc: Location;
-  typeId: number;
+  nodeId: number;
 };
 
 export type TypeAnnotation = Identifier;
@@ -112,7 +113,7 @@ export type Identifier = {
   type: "Identifier";
   name: string;
   loc: Location;
-  typeId: number;
+  nodeId: number;
 };
 
 export type Literal = {
@@ -120,7 +121,7 @@ export type Literal = {
   value: any;
   annotation: TypeAnnotation;
   loc: Location;
-  typeId: number;
+  nodeId: number;
 };
 
 export type CallExpression = {
@@ -128,7 +129,7 @@ export type CallExpression = {
   callee: Identifier;
   args: Expression[];
   loc: Location;
-  typeId: number;
+  nodeId: number;
 };
 
 export type ExpressionPath = {
@@ -136,7 +137,7 @@ export type ExpressionPath = {
   head: Identifier;
   tail: Identifier | CallExpression;
   loc: Location;
-  typeId: number;
+  nodeId: number;
 };
 
 export type BinaryExpression = {
@@ -145,7 +146,7 @@ export type BinaryExpression = {
   right: Expression;
   operator: "+" | "*" | "==";
   loc: Location;
-  typeId: number;
+  nodeId: number;
 };
 
 export type MemberExpression = {
@@ -153,5 +154,5 @@ export type MemberExpression = {
   head: Identifier;
   tail: Identifier;
   loc: Location;
-  typeId: number;
+  nodeId: number;
 };

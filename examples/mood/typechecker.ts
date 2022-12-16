@@ -64,7 +64,7 @@ class TypeChecker {
       }
       case "Parameter": {
         const paramType = this.fromAnnotation(node.annotation, scope);
-        return this.typeAstNode(node.typeId, paramType);
+        return this.typeAstNode(node.nodeId, paramType);
       }
       case "StructConstruction": {
         return this.tcStructConstruction(node, scope);
@@ -114,14 +114,14 @@ class TypeChecker {
         annotate(node.tail.loc, `Type is ${head.type}`),
       );
     }
-    return this.typeAstNode(node.typeId, tail.valueType);
+    return this.typeAstNode(node.nodeId, tail.valueType);
   }
 
   tcVariableDeclaration(node: VariableDeclaration, scope: SymbolTable) {
     const type = this.fromAnnotation(node.annotation, scope);
     this.expectType(node.value, type, scope);
     scope.define(node.name.name, type);
-    return this.typeAstNode(node.typeId, type);
+    return this.typeAstNode(node.nodeId, type);
   }
 
   tcLiteral(node: Literal, scope: SymbolTable) {
@@ -130,7 +130,7 @@ class TypeChecker {
         ? ({ type: "bool" } as const)
         : this.fromAnnotation(node.annotation, scope);
 
-    return this.typeAstNode(node.typeId, type);
+    return this.typeAstNode(node.nodeId, type);
   }
 
   tcExpressionPath(node: ExpressionPath, scope: SymbolTable) {
@@ -203,7 +203,7 @@ class TypeChecker {
         }
         const arg = tail.args[0];
         this.typeAstNode(
-          arg.typeId,
+          arg.nodeId,
           this.expectType(arg, variant.valueType!, scope),
         );
         break;
@@ -212,7 +212,7 @@ class TypeChecker {
         // @ts-ignore
         throw new Error("Unexpected tail type: " + tail.type);
     }
-    return this.typeAstNode(node.typeId, type);
+    return this.typeAstNode(node.nodeId, type);
   }
 
   tcCallExpression(node: CallExpression, scope: SymbolTable) {
@@ -258,7 +258,7 @@ class TypeChecker {
     for (const [i, arg] of node.args.entries()) {
       this.expectType(arg, func.params[i], scope);
     }
-    return this.typeAstNode(node.typeId, func.result);
+    return this.typeAstNode(node.nodeId, func.result);
   }
 
   tcIdentifier(node: Identifier, scope: SymbolTable) {
@@ -269,7 +269,7 @@ class TypeChecker {
         annotate(node.loc, "This variable is not defined."),
       );
     }
-    return this.typeAstNode(node.typeId, type);
+    return this.typeAstNode(node.nodeId, type);
   }
 
   tcEnumDeclaration(node: EnumDeclaration, scope: SymbolTable): SymbolType {
@@ -354,10 +354,10 @@ class TypeChecker {
           ),
         );
       }
-      this.typeAstNode(field.name.typeId, fieldType.valueType);
+      this.typeAstNode(field.name.nodeId, fieldType.valueType);
       this.expectType(field.value, fieldType.valueType, scope);
     }
-    return this.typeAstNode(node.typeId, struct);
+    return this.typeAstNode(node.nodeId, struct);
   }
 
   tcStructDeclaration(node: StructDeclaration, scope: SymbolTable): SymbolType {
@@ -383,7 +383,7 @@ class TypeChecker {
       functionScope.define(param.name.name, paramType);
     }
     const result = this.fromAnnotation(node.returnType, scope);
-    this.typeAstNode(node.returnType.typeId, result);
+    this.typeAstNode(node.returnType.nodeId, result);
 
     scope.define(node.id.name, {
       type: "function",
@@ -408,7 +408,7 @@ class TypeChecker {
           );
         }
         this.expectType(node.right, leftType, scope);
-        return this.typeAstNode(node.typeId, leftType);
+        return this.typeAstNode(node.nodeId, leftType);
       }
       case "==": {
         if (
@@ -426,7 +426,7 @@ class TypeChecker {
           );
         }
         this.expectType(node.right, leftType, scope);
-        return this.typeAstNode(node.typeId, { type: "bool" });
+        return this.typeAstNode(node.nodeId, { type: "bool" });
       }
     }
   }
@@ -439,8 +439,8 @@ class TypeChecker {
     return lastType;
   }
 
-  typeAstNode(typeId: number, type: SymbolType): SymbolType {
-    return this._typeTable.define(typeId, type);
+  typeAstNode(nodeId: number, type: SymbolType): SymbolType {
+    return this._typeTable.define(nodeId, type);
   }
 
   expectType(node: AstNode, type: SymbolType, scope: SymbolTable): SymbolType {
@@ -484,6 +484,6 @@ class TypeChecker {
         annotate(annotation.loc, "This type is not defined."),
       );
     }
-    return found;
+    return this.typeAstNode(annotation.nodeId, found);
   }
 }

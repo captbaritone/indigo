@@ -503,6 +503,10 @@ export class FunctionContext {
       results: this._results,
     };
   }
+
+  getResults(): ValType[] {
+    return this._results;
+  }
 }
 
 export class GlobalContext {
