@@ -1,6 +1,17 @@
 import { ExpressionContext, FunctionContext, ModuleContext } from "../..";
 import { NumType, Mut } from "../../types";
-import { AstNode, FunctionDeclaration } from "./ast";
+import {
+  AstNode,
+  BinaryExpression,
+  BlockExpression,
+  ExpressionPath,
+  FunctionDeclaration,
+  Literal,
+  MemberExpression,
+  Program,
+  StructConstruction,
+  VariableDeclaration,
+} from "./ast";
 import { SymbolType } from "./SymbolTable";
 import TypeTable from "./TypeTable";
 import { StackSizes } from "./MemoryLayout";
@@ -106,6 +117,259 @@ export class WasmEmitter {
     );
   }
 
+  emit(ast: AstNode) {
+    switch (ast.type) {
+      case "Program":
+        return this.emitProgram(ast);
+      case "FunctionDeclaration":
+        return this.emitFunctionDeclaration(ast);
+      case "BlockExpression":
+        return this.emitBlockExpression(ast);
+      case "StructDeclaration":
+      case "EnumDeclaration":
+        // These are just type declarations, which we processed during type
+        // checking. No need to emit anything.
+        break;
+      case "StructConstruction":
+        return this.emitStructConstruction(ast);
+      case "MemberExpression":
+        return this.emitMemberExpression(ast);
+      case "BinaryExpression":
+        return this.emitBinaryExpression(ast);
+      case "CallExpression":
+        for (const arg of ast.args) {
+          this.emit(arg);
+        }
+        this.exp.call(this.getFunction(ast.callee.name));
+        break;
+      case "ExpressionPath":
+        return this.emitExpressionPath(ast);
+      case "VariableDeclaration":
+        return this.emitVariableDeclaration(ast);
+      case "Identifier":
+        this.exp.localGet(this.getLocal(ast.name));
+        return;
+      case "Literal":
+        return this.emitLiteral(ast);
+      default:
+        // @ts-ignore
+        throw new Error(`Unknown node type: ${ast.type}`);
+    }
+  }
+
+  emitStructConstruction(ast: StructConstruction) {
+    const structType = this.lookupAstNode(ast.nodeId);
+    if (structType.type !== "struct") {
+      throw new Error("Expected struct type");
+    }
+    let size = 0;
+    for (const field of structType.fields) {
+      switch (field.valueType.type) {
+        case "struct":
+        case "i32":
+          size += 4;
+          break;
+        default:
+          throw new Error(`Unhandled field type: ${field.valueType.type}`);
+      }
+    }
+    this.exp.i32Const(size);
+    this.exp.call(this._mallocIndex);
+    // Store the pointer to the struct
+    // This will be the return value of this expression (will not get
+    // consumed when assigning fields).
+    this.exp.globalGet(this._heapPointerIndex);
+
+    // Each field allocation will be done relative to this pointer and thus
+    // will consume one instance of it from the stack.
+    // We need to duplicate the pointer on the stack here since it's a global
+    // value and thus might be mutated as we recuse into the field values.
+    for (const field of structType.fields) {
+      this.exp.globalGet(this._heapPointerIndex);
+    }
+
+    let offset = 0;
+    // I'm going to need to be able to duplicate this.
+    // Pointer to the struct is now on the stack
+    for (const field of structType.fields) {
+      const value = ast.fields.find((f) => f.name.name === field.name);
+      if (value == null) {
+        throw new Error(`Missing field.`);
+      }
+      this.emit(value.value);
+      this.exp.i32Store(offset, 0);
+      switch (field.valueType.type) {
+        case "struct":
+        case "i32":
+          offset += 4;
+          break;
+        default:
+          throw new Error(`Unhandled field type: ${field.valueType.type}`);
+      }
+    }
+  }
+
+  emitMemberExpression(ast: MemberExpression) {
+    this.emit(ast.head);
+    const struct = this.lookupAstNode(ast.head.nodeId);
+    if (struct.type !== "struct") {
+      throw new Error("Expected struct type");
+    }
+    let offset = 0;
+    for (const field of struct.fields) {
+      if (field.name === ast.tail.name) {
+        break;
+      }
+      offset += 4;
+    }
+    this.exp.i32Load(offset, 0);
+  }
+
+  emitBinaryExpression(ast: BinaryExpression) {
+    this.emit(ast.left);
+    this.emit(ast.right);
+    const leftType = this.lookupAstNode(ast.left.nodeId).type;
+    switch (ast.operator) {
+      case "+":
+        switch (leftType) {
+          case "i32":
+            this.exp.i32Add();
+            break;
+          case "f64":
+            this.exp.f64Add();
+            break;
+          default:
+            throw new Error(
+              "Expected LHS of a + operation to be a numeric type",
+            );
+        }
+        break;
+      case "*":
+        switch (leftType) {
+          case "i32":
+            this.exp.i32Mul();
+            break;
+          case "f64":
+            this.exp.f64Mul();
+            break;
+          default:
+            throw new Error(
+              "Expected LHS of a * operation to be a numeric type",
+            );
+        }
+        break;
+      case "==":
+        switch (leftType) {
+          case "i32":
+          case "bool":
+            this.exp.i32Eq();
+            break;
+          case "f64":
+            this.exp.f64Eq();
+            break;
+          case "struct":
+            throw new Error("TODO: Implement struct equality");
+          case "enum":
+            throw new Error("TODO: Implement enum equality");
+          default:
+            throw new Error(
+              `Equality comparison is not supported for the type: ${ast.left.type}`,
+            );
+        }
+        break;
+      default:
+        throw new Error(`Unknown operator: ${ast.operator}`);
+    }
+  }
+
+  emitExpressionPath(ast: ExpressionPath) {
+    const enumSymbol = this.lookupAstNode(ast.nodeId);
+    if (enumSymbol.type !== "enum") {
+      throw new Error("Expected enum type");
+    }
+    const variantIndex = enumSymbol.variants.findIndex((variant) => {
+      if (variant.valueType != null || ast.tail.type === "CallExpression") {
+        throw new Error("TODO: Support enum variants with values");
+      }
+      return variant.name === ast.tail.name;
+    });
+    // TODO: Support enum variants with values
+    // For now we'll represent enum variants as i32s of their index allocated on the heap.
+    /*
+    this.exp.i32Const(4); // Size of an i32 variantIndex
+    this.exp.call(this._mallocIndex);
+    this.exp.globalGet(this._heapPointerIndex);
+    this.exp.globalGet(this._heapPointerIndex);
+    this.exp.i32Const(variantIndex);
+    this.exp.i32Store(0, 0);
+    */
+    this.exp.i32Const(variantIndex);
+  }
+
+  emitVariableDeclaration(ast: VariableDeclaration) {
+    const type = this.lookupAstNodeNumType(ast.nodeId);
+    const index = this.func.defineLocal(type);
+    this.defineLocal(ast.name.name, index);
+    this.emit(ast.value);
+    this.exp.localTee(index);
+  }
+
+  emitLiteral(ast: Literal) {
+    const type = this.lookupAstNodeNumType(ast.nodeId);
+    if (typeof ast.value === "boolean") {
+      this.exp.i32Const(ast.value ? 1 : 0);
+    } else if (typeof ast.value === "number") {
+      const value = Number(ast.value);
+      switch (type) {
+        case NumType.F32:
+          this.exp.f32Const(value);
+          break;
+        case NumType.F64:
+          this.exp.f64Const(value);
+          break;
+        case NumType.I32:
+          this.exp.i32Const(value);
+          break;
+        case NumType.I64:
+          this.exp.i64Const(value);
+        default:
+          throw new Error(
+            `Unknown primitive literal name: ${ast.annotation.name}`,
+          );
+      }
+    } else {
+      throw new Error(`Unknown primitive literal: ${typeof ast.value}`);
+    }
+  }
+
+  emitFunctionDeclaration(ast: FunctionDeclaration) {
+    const name = ast.id.name;
+    const locals = new Map<string, number>();
+
+    const params: NumType[] = [];
+    for (const [i, param] of ast.params.entries()) {
+      params.push(this.lookupAstNodeNumType(param.nodeId));
+      locals.set(param.name.name, i);
+    }
+
+    const signature = {
+      params,
+      results: [this.lookupAstNodeNumType(ast.returnType.nodeId)],
+      exportName: ast.public ? name : null,
+    };
+
+    const index = this.ctx.declareFunction(signature, (func) => {
+      this.emitPrelude(ast, func);
+      this._locals = locals;
+      this.exp = func.exp;
+      this.func = func;
+      this.emit(ast.body);
+      this.emitPostlude(ast, func);
+    });
+
+    // TODO: This won't be compatible with recursive functions.
+    this.defineFunction(name, index);
+  }
   // Responsible for setting the stack pointer to the base of the stack frame.
   // Also pushes the previous stack pointer onto the stack which will be
   // consumed by the postlude.
@@ -146,267 +410,24 @@ export class WasmEmitter {
     }
   }
 
-  emit(ast: AstNode) {
-    switch (ast.type) {
-      case "Program": {
-        for (const func of ast.body) {
-          this.emit(func);
-        }
-        break;
-      }
-      case "FunctionDeclaration": {
-        const name = ast.id.name;
-        const locals = new Map<string, number>();
-
-        const params: NumType[] = [];
-        for (const [i, param] of ast.params.entries()) {
-          params.push(this.lookupAstNodeNumType(param.nodeId));
-          locals.set(param.name.name, i);
-        }
-
-        const signature = {
-          params,
-          results: [this.lookupAstNodeNumType(ast.returnType.nodeId)],
-          exportName: ast.public ? name : null,
-        };
-
-        const index = this.ctx.declareFunction(signature, (func) => {
-          this.emitPrelude(ast, func);
-          this._locals = locals;
-          this.exp = func.exp;
-          this.func = func;
-          this.emit(ast.body);
-          this.emitPostlude(ast, func);
-        });
-
-        // TODO: This won't be compatible with recursive functions.
-        this.defineFunction(name, index);
-
-        break;
-      }
-      case "BlockExpression": {
-        if (ast.expressions.length === 0) {
-          break;
-        }
-        for (let i = 0; i < ast.expressions.length; i++) {
-          this.emit(ast.expressions[i]);
-          if (i < ast.expressions.length - 1) {
-            this.exp.drop();
-          }
-        }
-        break;
-      }
-      case "StructDeclaration":
-      case "EnumDeclaration": {
-        // These are just type declarations, which we processed during type
-        // checking. No need to emit anything.
-        break;
-      }
-      case "StructConstruction": {
-        // Compute struct size
-        const structType = this.lookupAstNode(ast.nodeId);
-        if (structType.type !== "struct") {
-          throw new Error("Expected struct type");
-        }
-        let size = 0;
-        for (const field of structType.fields) {
-          switch (field.valueType.type) {
-            case "struct":
-            case "i32":
-              size += 4;
-              break;
-            default:
-              throw new Error(`Unhandled field type: ${field.valueType.type}`);
-          }
-        }
-        this.exp.i32Const(size);
-        this.exp.call(this._mallocIndex);
-        // Store the pointer to the struct
-        // This will be the return value of this expression (will not get
-        // consumed when assigning fields).
-        this.exp.globalGet(this._heapPointerIndex);
-
-        // Each field allocation will be done relative to this pointer and thus
-        // will consume one instance of it from the stack.
-        // We need to duplicate the pointer on the stack here since it's a global
-        // value and thus might be mutated as we recuse into the field values.
-        for (const field of structType.fields) {
-          this.exp.globalGet(this._heapPointerIndex);
-        }
-
-        let offset = 0;
-        // I'm going to need to be able to duplicate this.
-        // Pointer to the struct is now on the stack
-        for (const field of structType.fields) {
-          const value = ast.fields.find((f) => f.name.name === field.name);
-          if (value == null) {
-            throw new Error(`Missing field.`);
-          }
-          this.emit(value.value);
-          this.exp.i32Store(offset, 0);
-          switch (field.valueType.type) {
-            case "struct":
-            case "i32":
-              offset += 4;
-              break;
-            default:
-              throw new Error(`Unhandled field type: ${field.valueType.type}`);
-          }
-        }
-        // Earlier we duplicated the pointer to the struct on the stack.
-        break;
-      }
-      case "MemberExpression": {
-        this.emit(ast.head);
-        const struct = this.lookupAstNode(ast.head.nodeId);
-        if (struct.type !== "struct") {
-          throw new Error("Expected struct type");
-        }
-        let offset = 0;
-        for (const field of struct.fields) {
-          if (field.name === ast.tail.name) {
-            break;
-          }
-          offset += 4;
-        }
-        this.exp.i32Load(offset, 0);
-        break;
-      }
-      case "BinaryExpression": {
-        this.emit(ast.left);
-        this.emit(ast.right);
-        const leftType = this.lookupAstNode(ast.left.nodeId).type;
-        switch (ast.operator) {
-          case "+":
-            switch (leftType) {
-              case "i32":
-                this.exp.i32Add();
-                break;
-              case "f64":
-                this.exp.f64Add();
-                break;
-              default:
-                throw new Error(
-                  "Expected LHS of a + operation to be a numeric type",
-                );
-            }
-            break;
-          case "*":
-            switch (leftType) {
-              case "i32":
-                this.exp.i32Mul();
-                break;
-              case "f64":
-                this.exp.f64Mul();
-                break;
-              default:
-                throw new Error(
-                  "Expected LHS of a * operation to be a numeric type",
-                );
-            }
-            break;
-          case "==":
-            switch (leftType) {
-              case "i32":
-              case "bool":
-                this.exp.i32Eq();
-                break;
-              case "f64":
-                this.exp.f64Eq();
-                break;
-              case "struct":
-                throw new Error("TODO: Implement struct equality");
-              case "enum":
-                throw new Error("TODO: Implement enum equality");
-              default:
-                throw new Error(
-                  `Equality comparison is not supported for the type: ${ast.left.type}`,
-                );
-            }
-            break;
-          default:
-            throw new Error(`Unknown operator: ${ast.operator}`);
-        }
-        break;
-      }
-      case "CallExpression": {
-        for (const arg of ast.args) {
-          this.emit(arg);
-        }
-        this.exp.call(this.getFunction(ast.callee.name));
-        break;
-      }
-      case "ExpressionPath": {
-        const enumSymbol = this.lookupAstNode(ast.nodeId);
-        if (enumSymbol.type !== "enum") {
-          throw new Error("Expected enum type");
-        }
-        const variantIndex = enumSymbol.variants.findIndex((variant) => {
-          if (variant.valueType != null || ast.tail.type === "CallExpression") {
-            throw new Error("TODO: Support enum variants with values");
-          }
-          return variant.name === ast.tail.name;
-        });
-        // TODO: Support enum variants with values
-        // For now we'll represent enum variants as i32s of their index allocated on the heap.
-        /*
-        this.exp.i32Const(4); // Size of an i32 variantIndex
-        this.exp.call(this._mallocIndex);
-        this.exp.globalGet(this._heapPointerIndex);
-        this.exp.globalGet(this._heapPointerIndex);
-        this.exp.i32Const(variantIndex);
-        this.exp.i32Store(0, 0);
-        */
-
-        this.exp.i32Const(variantIndex);
-        break;
-      }
-      case "VariableDeclaration": {
-        const type = this.lookupAstNodeNumType(ast.nodeId);
-        const index = this.func.defineLocal(type);
-        this.defineLocal(ast.name.name, index);
-        this.emit(ast.value);
-        this.exp.localTee(index);
-        break;
-      }
-      case "Identifier": {
-        this.exp.localGet(this.getLocal(ast.name));
-        break;
-      }
-      case "Literal": {
-        const type = this.lookupAstNodeNumType(ast.nodeId);
-        if (typeof ast.value === "boolean") {
-          this.exp.i32Const(ast.value ? 1 : 0);
-        } else if (typeof ast.value === "number") {
-          const value = Number(ast.value);
-          switch (type) {
-            case NumType.F32:
-              this.exp.f32Const(value);
-              break;
-            case NumType.F64:
-              this.exp.f64Const(value);
-              break;
-            case NumType.I32:
-              this.exp.i32Const(value);
-              break;
-            case NumType.I64:
-              this.exp.i64Const(value);
-            default:
-              throw new Error(
-                `Unknown primitive literal name: ${ast.annotation.name}`,
-              );
-          }
-        } else {
-          throw new Error(`Unknown primitive literal: ${typeof ast.value}`);
-        }
-
-        break;
-      }
-      default:
-        // @ts-ignore
-        throw new Error(`Unknown node type: ${ast.type}`);
+  emitProgram(ast: Program) {
+    for (const func of ast.body) {
+      this.emit(func);
     }
   }
+
+  emitBlockExpression(ast: BlockExpression) {
+    if (ast.expressions.length === 0) {
+      return;
+    }
+    for (let i = 0; i < ast.expressions.length; i++) {
+      this.emit(ast.expressions[i]);
+      if (i < ast.expressions.length - 1) {
+        this.exp.drop();
+      }
+    }
+  }
+
   defineLocal(name: string, index: number) {
     this._locals.set(name, index);
   }
