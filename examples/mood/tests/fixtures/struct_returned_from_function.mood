@@ -1,0 +1,12 @@
+struct Foo {
+  bar: i32
+}
+
+fn get_foo(): Foo {
+  Foo { bar: 42_i32 }
+}
+
+pub fn test(): i32 {
+  let foo: Foo = get_foo();
+  foo.bar
+}
