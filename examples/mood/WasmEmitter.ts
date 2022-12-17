@@ -12,10 +12,8 @@ import {
   StructConstruction,
   VariableDeclaration,
 } from "./ast";
-import { StructSymbol, SymbolType } from "./SymbolTable";
+import { SymbolType } from "./SymbolTable";
 import TypeTable from "./TypeTable";
-import { threadId } from "worker_threads";
-import { nodeModuleNameResolver } from "typescript";
 
 /**
  * Populates the ModuleContext with the program defined by AstNode.
@@ -344,6 +342,7 @@ export class WasmEmitter {
     // TODO: This won't be compatible with recursive functions.
     this.defineFunction(name, index);
   }
+
   // Responsible for setting the stack pointer to the base of the stack frame.
   // Also pushes the previous stack pointer onto the stack which will be
   // consumed by the postlude.
@@ -359,6 +358,12 @@ export class WasmEmitter {
     func.exp.globalSet(this.bsp);
   }
 
+  // Responsible for resetting the stack pointer to the previous frame's base pointer.
+  // The previous frame's base pointer is left on the stack by the prelude. However it's
+  // on the stack _before_ the return value. So we need to:
+  // 1. Pop the return value off the stack and into a local
+  // 2. Pop the previous frame's base pointer off the stack and into the global
+  // 3. Push the return value back onto the stack
   emitPostlude(ast: FunctionDeclaration, func: FunctionContext) {
     const resultTypes = func.getResults();
     if (resultTypes.length > 1) {
@@ -368,10 +373,17 @@ export class WasmEmitter {
       // Reset the stack pointer to the previous frame's base pointer.
       func.exp.globalSet(this.bsp);
     } else {
+      const resultType = resultTypes[0];
+      // At this point, we know that no locals are live any more.
+      // So, as an optimization, we will try to the first local that matches the
+      // return type as a place to stash the return value. If one does not exist,
+      // we will define a new one.
+      const index =
+        func.findLocalOfType(resultType) ?? func.defineLocal(resultType);
+
       // Define a local for temporarily placing the return value in.
       // Note: As an optimization we could use the first param as the return local
       // if the types match.
-      const index = func.defineLocal(resultTypes[0]);
       func.exp.localSet(index);
       func.exp.globalSet(this.bsp);
       func.exp.localGet(index);

@@ -1,16 +1,15 @@
 (module
   (type (;0;) (func (param i32 i32) (result i32)))
   (func (;0;) (type 0) (param i32 i32) (result i32)
-    (local i32)
     global.get 0
     global.get 1
     global.set 0
     local.get 0
     local.get 1
     i32.add
-    local.set 2
+    local.set 0
     global.set 0
-    local.get 2)
+    local.get 0)
   (memory (;0;) 10)
   (global (;0;) (mut i32) (i32.const 5000))
   (global (;1;) (mut i32) (i32.const 5000))
