@@ -13,6 +13,4 @@
   (memory (;0;) 10)
   (global (;0;) (mut i32) (i32.const 5000))
   (global (;1;) (mut i32) (i32.const 5000))
-  (global (;2;) (mut i32) (i32.const 0))
-  (global (;3;) (mut i32) (i32.const 0))
   (export "test" (func 0)))

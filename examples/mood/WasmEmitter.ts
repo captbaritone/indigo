@@ -52,6 +52,7 @@ export class WasmEmitter {
     this.sp = this.ctx.declareGlobal(i32Mut, (init) => {
       init.i32Const(5000);
     });
+    /*
     this._heapPointerIndex = this.ctx.declareGlobal(i32Mut, (init) => {
       init.i32Const(0);
     });
@@ -59,6 +60,7 @@ export class WasmEmitter {
     const nextHeapPointerIndex = this.ctx.declareGlobal(i32Mut, (init) => {
       init.i32Const(0);
     });
+    */
 
     // For now we use a simple bump allocator and simply leak memory under the
     // assumption/hope that we won't run out before the program terminates.
