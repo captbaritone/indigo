@@ -29,20 +29,21 @@ class Compiler {
         break;
       case "FunctionDeclaration": {
         const name = ast.id.name;
-        const params = {};
+        const params: NumType[] = [];
         for (const param of ast.params) {
-          params[param.name] = NumType.F64;
+          params.push(NumType.F64);
         }
-        this.ctx.declareFunction({
-          name,
-          params,
-          results: [NumType.F64],
-          export: true,
-        });
-        this.ctx.defineFunction(name, (exp) => {
-          this.exp = exp;
-          this.emit(ast.body);
-        });
+        this.ctx.declareFunction(
+          {
+            params,
+            results: [NumType.F64],
+            exportName: name,
+          },
+          ({ exp }) => {
+            this.exp = exp;
+            this.emit(ast.body);
+          },
+        );
         break;
       }
       case "ReturnStatement": {
