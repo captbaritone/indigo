@@ -33,7 +33,7 @@ export type StructField = {
 export type StructSymbol = {
   type: "struct";
   name: string;
-  fields: StructField[];
+  fields: { [name: string]: StructField };
   size: number;
 };
 

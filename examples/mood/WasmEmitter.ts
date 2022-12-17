@@ -171,7 +171,10 @@ export class WasmEmitter {
     // We then write the struct fields to the stack, starting at the new stack
     // pointer and working our way up. So, the first field is written at the
     // stack pointer, the second field is written at the stack pointer + 4, etc.
-    for (const field of structType.fields) {
+    //
+    // Note: We rely on stable object iteration order here for stable output, but since
+    // offsets are pre-computed, the order doesn't strictly matter for correctness.
+    for (const field of Object.values(structType.fields)) {
       this.exp.globalGet(this.sp);
       const value = ast.fields.find((f) => f.name.name === field.name);
       if (value == null) {
@@ -192,7 +195,7 @@ export class WasmEmitter {
     if (struct.type !== "struct") {
       throw new Error("Expected struct type");
     }
-    const field = struct.fields.find((f) => f.name === ast.tail.name)!;
+    const field = struct.fields[ast.tail.name];
     this.exp.i32Load(field.offset, 0);
   }
 

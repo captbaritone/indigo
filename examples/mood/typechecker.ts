@@ -107,7 +107,7 @@ class TypeChecker {
         annotate(node.head.loc, `Type is ${head.type}`),
       );
     }
-    const tail = head.fields.find((f) => f.name === node.tail.name);
+    const tail = head.fields[node.tail.name];
     if (tail == null) {
       throw new DiagnosticError(
         `Struct "${head.name}" does not have a field named "${node.tail.name}".`,
@@ -326,12 +326,14 @@ class TypeChecker {
       );
     }
     // Missing fields
-    const missingFields = struct.fields.filter((field) => {
-      return !node.fields.some((f) => f.name.name === field.name);
+    const missingFields = Object.keys(struct.fields).filter((fieldName) => {
+      return !node.fields.some((f) => f.name.name === fieldName);
     });
     if (missingFields.length > 0) {
       // TODO: Handle singular/plural correctly.
-      const names = missingFields.map((f) => `"${f.name}"`).join(", ");
+      const names = missingFields
+        .map((fieldName) => `"${fieldName}"`)
+        .join(", ");
       throw new DiagnosticError(
         `Missing struct field(s): ${names}.`,
         annotate(
@@ -342,7 +344,7 @@ class TypeChecker {
     }
     // Type-check/annotate the fields.
     for (const field of node.fields) {
-      const fieldType = struct.fields.find((f) => f.name === field.name.name);
+      const fieldType = struct.fields[field.name.name];
       // Incorrect field names
       if (fieldType == null) {
         // TODO: Could recommend a field name based on edit distance.
@@ -361,11 +363,15 @@ class TypeChecker {
   }
 
   tcStructDeclaration(node: StructDeclaration, scope: SymbolTable): SymbolType {
-    const fields: StructField[] = [];
+    const fields: { [name: string]: StructField } = {};
     let offset = 0;
     for (const field of node.fields) {
       const fieldType = this.fromAnnotation(field.annotation, scope);
-      fields.push({ name: field.id.name, valueType: fieldType, offset });
+      fields[field.id.name] = {
+        name: field.id.name,
+        valueType: fieldType,
+        offset,
+      };
       offset += this.sizeOf(fieldType);
     }
     scope.define(node.id.name, {
