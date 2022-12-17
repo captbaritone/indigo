@@ -26,7 +26,7 @@ const testDirs = [
     },
   },
   {
-    fixturesDir: path.join(__dirname, "fixtures"),
+    fixturesDir: path.join(__dirname, "evaluate"),
     transformer: async (code: string, fileName: string) => {
       const binary = compile(code);
       const instance = new WebAssembly.Instance(

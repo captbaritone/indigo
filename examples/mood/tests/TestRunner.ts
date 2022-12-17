@@ -29,7 +29,7 @@ export default class TestRunner {
     this._fixturesDir = fixturesDir;
     this._transformer = transformer;
     const filterRegex = filter != null ? new RegExp(filter) : null;
-    for (const fileName of fs.readdirSync(fixturesDir)) {
+    for (const fileName of readdirSyncRecursive(fixturesDir)) {
       if (fileName.endsWith(".mood")) {
         this._testFixtures.push(fileName);
         if (filterRegex != null && !fileName.match(filterRegex)) {
@@ -84,26 +84,26 @@ export default class TestRunner {
     if (this._skip.has(fixture)) {
       return;
     }
+
+    const fixturePath = path.join(this._fixturesDir, fixture);
+    const displayName = path.relative(this._fixturesDir, fixturePath);
     const expectedContent = fs.readFileSync(expectedFilePath, "utf-8");
 
-    const fixtureContent = fs.readFileSync(
-      path.join(this._fixturesDir, fixture),
-      "utf-8",
-    );
+    const fixtureContent = fs.readFileSync(fixturePath, "utf-8");
 
     const actual = await this.transform(fixtureContent, fixture);
 
     if (actual !== expectedContent) {
       if (this._write) {
-        console.error("UPDATED: " + fixture);
+        console.error("UPDATED: " + displayName);
         fs.writeFileSync(expectedFilePath, actual, "utf-8");
       } else {
         this._failureCount++;
-        console.error("FAILURE: " + fixture);
+        console.error("FAILURE: " + displayName);
         console.log(diff(expectedContent, actual));
       }
     } else {
-      console.log("OK: " + fixture);
+      console.log("OK: " + displayName);
     }
   }
 
@@ -117,4 +117,19 @@ export default class TestRunner {
       return e.message;
     }
   }
+}
+
+function readdirSyncRecursive(dir: string): string[] {
+  const files: string[] = [];
+  for (const file of fs.readdirSync(dir)) {
+    const filePath = path.join(dir, file);
+    if (fs.statSync(filePath).isDirectory()) {
+      for (const f of readdirSyncRecursive(filePath)) {
+        files.push(path.join(file, f));
+      }
+    } else {
+      files.push(file);
+    }
+  }
+  return files;
 }
