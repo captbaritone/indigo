@@ -1,3 +1,18 @@
+-----------------
+INPUT
+----------------- 
+enum Boolean {
+  True,
+  False
+}
+
+pub fn test(): i32 {
+  Boolean::Maybe;
+  10_i32
+}
+-----------------
+OUTPUT
+-----------------
 Error: Undefined variant "Maybe":
  --> invalid_enum_variant.mood:7:12
 

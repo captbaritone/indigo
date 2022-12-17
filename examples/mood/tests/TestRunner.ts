@@ -41,7 +41,8 @@ export default class TestRunner {
     }
   }
 
-  async run() {
+  // Returns true if the test passed
+  async run(): Promise<boolean> {
     for (const fixture of this._testFixtures) {
       await this._testFixture(fixture);
     }
@@ -51,7 +52,7 @@ export default class TestRunner {
       console.log(
         `${this._failureCount} failures found. Run with --write to update fixtures`,
       );
-      process.exit(1);
+      return false;
     } else {
       console.log("All tests passed!");
     }
@@ -68,9 +69,10 @@ export default class TestRunner {
           console.log(" - " + fileName);
         }
         console.log("Run with --write to deleted unexpected files");
-        process.exit(1);
+        return false;
       }
     }
+    return true;
   }
 
   async _testFixture(fixture: string) {
@@ -93,14 +95,23 @@ export default class TestRunner {
 
     const actual = await this.transform(fixtureContent, fixture);
 
-    if (actual !== expectedContent) {
+    const actualOutput = `-----------------
+INPUT
+----------------- 
+${fixtureContent}
+-----------------
+OUTPUT
+-----------------
+${actual}`;
+
+    if (actualOutput !== expectedContent) {
       if (this._write) {
         console.error("UPDATED: " + displayName);
-        fs.writeFileSync(expectedFilePath, actual, "utf-8");
+        fs.writeFileSync(expectedFilePath, actualOutput, "utf-8");
       } else {
         this._failureCount++;
         console.error("FAILURE: " + displayName);
-        console.log(diff(expectedContent, actual));
+        console.log(diff(expectedContent, actualOutput));
       }
     } else {
       console.log("OK: " + displayName);

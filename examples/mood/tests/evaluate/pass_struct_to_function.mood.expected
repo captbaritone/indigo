@@ -1,1 +1,19 @@
+-----------------
+INPUT
+----------------- 
+struct Foo {
+  bar: i32
+}
+
+fn get_bar(foo: Foo): i32 {
+  foo.bar
+}
+
+pub fn test(): i32 {
+  let foo: Foo = Foo { bar: 42_i32 };
+  get_bar(foo)
+}
+-----------------
+OUTPUT
+-----------------
 42

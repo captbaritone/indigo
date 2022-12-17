@@ -1,3 +1,18 @@
+-----------------
+INPUT
+----------------- 
+struct Foo {
+  a: i32,
+  b: i32
+}
+
+pub fn test(): i32 {
+    Foo { a: 1_i32, b: 1_f64 };
+    0_i32
+}
+-----------------
+OUTPUT
+-----------------
 Error: Expected "i32", got "f64":
  --> construct_struct_wrong_field_type.mood:7:24
 

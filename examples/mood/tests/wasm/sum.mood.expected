@@ -1,3 +1,12 @@
+-----------------
+INPUT
+----------------- 
+pub fn test(a: i32, b: i32): i32 {
+  a + b
+}
+-----------------
+OUTPUT
+-----------------
 (module
   (type (;0;) (func (param i32 i32) (result i32)))
   (func (;0;) (type 0) (param i32 i32) (result i32)

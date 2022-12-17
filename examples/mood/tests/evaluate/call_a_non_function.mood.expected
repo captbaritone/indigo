@@ -1,3 +1,12 @@
+-----------------
+INPUT
+----------------- 
+pub fn test(oops: f64): f64 {
+    oops()
+}
+-----------------
+OUTPUT
+-----------------
 Error: Tried calling "oops", but "oops" is not a function.:
  --> call_a_non_function.mood:2:5
 

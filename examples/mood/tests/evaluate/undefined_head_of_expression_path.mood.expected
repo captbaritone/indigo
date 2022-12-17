@@ -1,3 +1,13 @@
+-----------------
+INPUT
+----------------- 
+pub fn test(): f64 {
+  Oops::Bar
+}
+
+-----------------
+OUTPUT
+-----------------
 Error: Undefined enum "Oops":
  --> undefined_head_of_expression_path.mood:2:3
 

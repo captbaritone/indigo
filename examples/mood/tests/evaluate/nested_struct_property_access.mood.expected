@@ -1,1 +1,27 @@
+-----------------
+INPUT
+----------------- 
+struct Box {
+  width: i32,
+  height: i32, 
+}
+
+struct TwoBoxes {
+  box1: Box,
+  box2: Box,
+}
+
+fn area(box: Box): i32 {
+  box.width * box.height
+}
+
+pub fn test(): i32 {
+  let a: Box = Box { width: 10_i32, height: 20_i32 };
+  let b: Box = Box { width: 20_i32, height: 30_i32 };
+  let two_boxes: TwoBoxes = TwoBoxes { box1: a, box2: b };
+  area(two_boxes.box1) + area(two_boxes.box2)
+}
+-----------------
+OUTPUT
+-----------------
 800

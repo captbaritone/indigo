@@ -1,3 +1,18 @@
+-----------------
+INPUT
+----------------- 
+enum Maybe {
+  Some(i32),
+  None
+}
+
+pub fn test(): i32 {
+  let x: Maybe = Maybe::Some();
+  10_i32
+}
+-----------------
+OUTPUT
+-----------------
 Error: Variant "Some" is not a unit variant. Expected a value argument.:
  --> enum_construction_missing_value.mood:7:30
 

@@ -1,3 +1,18 @@
+-----------------
+INPUT
+----------------- 
+struct Foo {
+  a: i32,
+  b: i32
+}
+
+pub fn test(): i32 {
+    Foo { a: 1_i32, b: 1_i32, c: 1_i32 };
+    0_i32
+}
+-----------------
+OUTPUT
+-----------------
 Error: Undefined struct field: "c".:
  --> construct_struct_undefined_field.mood:7:31
 

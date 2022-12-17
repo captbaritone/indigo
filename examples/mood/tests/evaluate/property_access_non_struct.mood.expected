@@ -1,3 +1,13 @@
+-----------------
+INPUT
+----------------- 
+pub fn test(): i32 {
+    let b: i32 = 10_i32;
+    b.prop
+}
+-----------------
+OUTPUT
+-----------------
 Error: Cannot access member of non-struct type.:
  --> property_access_non_struct.mood:3:5
 

@@ -1,3 +1,18 @@
+-----------------
+INPUT
+----------------- 
+enum Maybe {
+  Some(oops),
+  None
+}
+
+pub fn test(): i32 {
+  let x: Maybe = Maybe::Some(10_i32);
+  10_i32
+}
+-----------------
+OUTPUT
+-----------------
 Error: Unknown type: oops:
  --> enum_declaration_with_variant_value_unknown_type.mood:2:8
 

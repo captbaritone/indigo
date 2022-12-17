@@ -1,3 +1,12 @@
+-----------------
+INPUT
+----------------- 
+pub fn test(num: f64): f64 {
+    num::Bar
+}
+-----------------
+OUTPUT
+-----------------
 Error: Expected enum, got f64:
  --> expression_path_from_number.mood:2:5
 

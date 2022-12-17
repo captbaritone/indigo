@@ -1,3 +1,22 @@
+-----------------
+INPUT
+----------------- 
+enum Foo {
+    A,
+    B,
+    C,
+}
+
+pub fn test(): i32 {
+  Foo {
+    bar: i32
+  };
+
+  0_i32
+}
+-----------------
+OUTPUT
+-----------------
 Error: Tried to use a enum as a struct.:
  --> construct_enum_as_struct.mood:8:3
 

@@ -9,9 +9,13 @@ async function main() {
   const filter = process.argv.find((arg) => arg.startsWith("--filter="));
 
   const filterRegex = filter != null ? filter.slice(9) : null;
+  let failures = false;
   for (const { fixturesDir, transformer } of testDirs) {
     const runner = new TestRunner(fixturesDir, write, filterRegex, transformer);
-    await runner.run();
+    failures = (await runner.run()) || failures;
+  }
+  if (failures) {
+    process.exit(1);
   }
 }
 

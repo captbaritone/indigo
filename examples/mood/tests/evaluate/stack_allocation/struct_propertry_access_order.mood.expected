@@ -1,1 +1,17 @@
+-----------------
+INPUT
+----------------- 
+struct Box {
+  width: i32,
+  height: i32, 
+}
+
+pub fn test(): i32 {
+  let box_a: Box = Box { width: 10_i32, height: 20_i32 };
+  let box_b: Box = Box { width: 30_i32, height: 40_i32 };
+  box_b.height
+}
+-----------------
+OUTPUT
+-----------------
 40
