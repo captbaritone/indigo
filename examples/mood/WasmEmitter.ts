@@ -12,20 +12,16 @@ import {
   StructConstruction,
   VariableDeclaration,
 } from "./ast";
-import { SymbolType } from "./SymbolTable";
+import { StructSymbol, SymbolType } from "./SymbolTable";
 import TypeTable from "./TypeTable";
-import { StackSizes } from "./MemoryLayout";
+import { threadId } from "worker_threads";
+import { nodeModuleNameResolver } from "typescript";
 
 /**
  * Populates the ModuleContext with the program defined by AstNode.
  */
-export function emit(
-  ctx: ModuleContext,
-  ast: AstNode,
-  typeTable: TypeTable,
-  stackSizes: StackSizes,
-) {
-  const emitter = new WasmEmitter(ctx, typeTable, stackSizes);
+export function emit(ctx: ModuleContext, ast: AstNode, typeTable: TypeTable) {
+  const emitter = new WasmEmitter(ctx, typeTable);
   emitter.emit(ast);
 }
 
@@ -34,31 +30,29 @@ export class WasmEmitter {
   func: FunctionContext;
   exp: ExpressionContext;
   _typeTable: TypeTable;
-  _stackSizes: StackSizes;
   _globals: Map<string, number> = new Map();
   _functions: Map<string, number> = new Map();
   _mallocIndex: number;
   _heapPointerIndex: number;
-  sp: number; // Stack base pointer
+  bsp: number; // Base stack pointer
+  sp: number; // Stack pointer
   _locals: Map<string, number>;
-  constructor(
-    ctx: ModuleContext,
-    typeTable: TypeTable,
-    stackSizes: StackSizes,
-  ) {
+  constructor(ctx: ModuleContext, typeTable: TypeTable) {
     this.ctx = ctx;
     this._typeTable = typeTable;
-    this._stackSizes = stackSizes;
     // Start allocation with one page.
     // We don't set a max memory size.
-    this.ctx.defineMemory({ min: 1 });
+    this.ctx.defineMemory({ min: 10 });
     this._defineBuiltins();
   }
 
   _defineBuiltins() {
     const i32Mut = { type: NumType.I32, mut: Mut.VAR };
+    this.bsp = this.ctx.declareGlobal(i32Mut, (init) => {
+      init.i32Const(5000);
+    });
     this.sp = this.ctx.declareGlobal(i32Mut, (init) => {
-      init.i32Const(0);
+      init.i32Const(5000);
     });
     this._heapPointerIndex = this.ctx.declareGlobal(i32Mut, (init) => {
       init.i32Const(0);
@@ -111,10 +105,13 @@ export class WasmEmitter {
       exp.i32Add();
       exp.globalSet(nextHeapPointerIndex);
     };
+    // TODO: Reenable malloc once we add heap allocations.
+    /*
     this._mallocIndex = this.ctx.declareFunction(
       { params: [NumType.I32], results: [] },
       ({ exp }) => defineMalloc(exp),
     );
+    */
   }
 
   emit(ast: AstNode) {
@@ -158,55 +155,35 @@ export class WasmEmitter {
   }
 
   emitStructConstruction(ast: StructConstruction) {
+    // TODO: Consider using a local for the stack pointer
     const structType = this.lookupAstNode(ast.nodeId);
     if (structType.type !== "struct") {
       throw new Error("Expected struct type");
     }
-    let size = 0;
-    for (const field of structType.fields) {
-      switch (field.valueType.type) {
-        case "struct":
-        case "i32":
-          size += 4;
-          break;
-        default:
-          throw new Error(`Unhandled field type: ${field.valueType.type}`);
-      }
-    }
-    this.exp.i32Const(size);
-    this.exp.call(this._mallocIndex);
-    // Store the pointer to the struct
-    // This will be the return value of this expression (will not get
-    // consumed when assigning fields).
-    this.exp.globalGet(this._heapPointerIndex);
 
-    // Each field allocation will be done relative to this pointer and thus
-    // will consume one instance of it from the stack.
-    // We need to duplicate the pointer on the stack here since it's a global
-    // value and thus might be mutated as we recuse into the field values.
-    for (const field of structType.fields) {
-      this.exp.globalGet(this._heapPointerIndex);
-    }
+    // Allocate space for the struct on the stack by moving the stack pointer
+    // down by the size of the struct (subtract)
+    this.exp.globalGet(this.sp);
+    this.exp.i32Const(structType.size);
+    this.exp.i32Sub();
+    this.exp.globalSet(this.sp);
 
-    let offset = 0;
-    // I'm going to need to be able to duplicate this.
-    // Pointer to the struct is now on the stack
+    // We then write the struct fields to the stack, starting at the new stack
+    // pointer and working our way up. So, the first field is written at the
+    // stack pointer, the second field is written at the stack pointer + 4, etc.
     for (const field of structType.fields) {
+      this.exp.globalGet(this.sp);
       const value = ast.fields.find((f) => f.name.name === field.name);
       if (value == null) {
         throw new Error(`Missing field.`);
       }
       this.emit(value.value);
-      this.exp.i32Store(offset, 0);
-      switch (field.valueType.type) {
-        case "struct":
-        case "i32":
-          offset += 4;
-          break;
-        default:
-          throw new Error(`Unhandled field type: ${field.valueType.type}`);
-      }
+      this.exp.i32Store(field.offset, 0);
     }
+
+    // Finally, we return the stack pointer, which is now pointing to the
+    // beginning of the struct.
+    this.exp.globalGet(this.sp);
   }
 
   emitMemberExpression(ast: MemberExpression) {
@@ -215,14 +192,8 @@ export class WasmEmitter {
     if (struct.type !== "struct") {
       throw new Error("Expected struct type");
     }
-    let offset = 0;
-    for (const field of struct.fields) {
-      if (field.name === ast.tail.name) {
-        break;
-      }
-      offset += 4;
-    }
-    this.exp.i32Load(offset, 0);
+    const field = struct.fields.find((f) => f.name === ast.tail.name)!;
+    this.exp.i32Load(field.offset, 0);
   }
 
   emitBinaryExpression(ast: BinaryExpression) {
@@ -374,21 +345,15 @@ export class WasmEmitter {
   // Also pushes the previous stack pointer onto the stack which will be
   // consumed by the postlude.
   emitPrelude(ast: FunctionDeclaration, func: FunctionContext) {
-    const stackSize = this._stackSizes.get(ast.nodeId);
-    if (stackSize == null) {
-      throw new Error(`Missing stack size for function ${ast.id.name}`);
-    }
     // Save the previous function's base stack pointer.
     // This will stay on the stack until the postlude.
-    func.exp.globalGet(this.sp);
+    func.exp.globalGet(this.bsp);
 
-    // Update the base stack pointer for our stack frame.
-    func.exp.globalGet(this.sp);
-    func.exp.i32Const(stackSize);
-    func.exp.i32Sub();
+    // Set the base stack pointer to the current stack pointer.
     // It looks to me like C uses a local for the current frame's stack pointer.
     // Maybe that's more efficient?
-    func.exp.globalSet(this.sp);
+    func.exp.globalGet(this.sp);
+    func.exp.globalSet(this.bsp);
   }
 
   emitPostlude(ast: FunctionDeclaration, func: FunctionContext) {
@@ -398,14 +363,14 @@ export class WasmEmitter {
     }
     if (resultTypes.length === 0) {
       // Reset the stack pointer to the previous frame's base pointer.
-      func.exp.globalSet(this.sp);
+      func.exp.globalSet(this.bsp);
     } else {
       // Define a local for temporarily placing the return value in.
       // Note: As an optimization we could use the first param as the return local
       // if the types match.
       const index = func.defineLocal(resultTypes[0]);
       func.exp.localSet(index);
-      func.exp.globalSet(this.sp);
+      func.exp.globalSet(this.bsp);
       func.exp.localGet(index);
     }
   }

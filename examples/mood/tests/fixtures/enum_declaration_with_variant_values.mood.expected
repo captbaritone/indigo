@@ -1,11 +1,1 @@
-Error: TODO: Support enum variants with values
-    at findIndex (/Users/captbaritone/projects/wasm-compiler/examples/mood/WasmEmitter.ts:292:15)
-    at Array.findIndex (<anonymous>)
-    at WasmEmitter.emitExpressionPath (/Users/captbaritone/projects/wasm-compiler/examples/mood/WasmEmitter.ts:290:46)
-    at WasmEmitter.emit (/Users/captbaritone/projects/wasm-compiler/examples/mood/WasmEmitter.ts:146:21)
-    at WasmEmitter.emitVariableDeclaration (/Users/captbaritone/projects/wasm-compiler/examples/mood/WasmEmitter.ts:313:10)
-    at WasmEmitter.emit (/Users/captbaritone/projects/wasm-compiler/examples/mood/WasmEmitter.ts:148:21)
-    at WasmEmitter.emitBlockExpression (/Users/captbaritone/projects/wasm-compiler/examples/mood/WasmEmitter.ts:424:12)
-    at WasmEmitter.emit (/Users/captbaritone/projects/wasm-compiler/examples/mood/WasmEmitter.ts:127:21)
-    at cb (/Users/captbaritone/projects/wasm-compiler/examples/mood/WasmEmitter.ts:366:12)
-    at ModuleContext.declareFunction (/Users/captbaritone/projects/wasm-compiler/index.ts:79:5)
+TODO: Support enum variants with values

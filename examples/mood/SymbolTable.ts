@@ -18,19 +18,26 @@ export type SymbolType =
   | FunctionSymbol
   | EnumSymbol;
 
-type FunctionSymbol = {
+export type FunctionSymbol = {
   type: "function";
   params: SymbolType[];
   result: SymbolType;
 };
 
-type StructSymbol = {
-  type: "struct";
+export type StructField = {
   name: string;
-  fields: { name: string; valueType: SymbolType }[];
+  valueType: SymbolType;
+  offset: number;
 };
 
-type EnumSymbol = {
+export type StructSymbol = {
+  type: "struct";
+  name: string;
+  fields: StructField[];
+  size: number;
+};
+
+export type EnumSymbol = {
   type: "enum";
   name: string;
   variants: { name: string; valueType: SymbolType | null }[];

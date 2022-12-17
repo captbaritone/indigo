@@ -18,7 +18,7 @@ import {
 } from "./ast";
 import { lastChar, union } from "./Location";
 import DiagnosticError, { annotate } from "./DiagnosticError";
-import SymbolTable, { SymbolType } from "./SymbolTable";
+import SymbolTable, { StructField, SymbolType } from "./SymbolTable";
 import TypeTable from "./TypeTable";
 
 /**
@@ -361,12 +361,19 @@ class TypeChecker {
   }
 
   tcStructDeclaration(node: StructDeclaration, scope: SymbolTable): SymbolType {
-    const fields: { name: string; valueType: SymbolType }[] = [];
+    const fields: StructField[] = [];
+    let offset = 0;
     for (const field of node.fields) {
       const fieldType = this.fromAnnotation(field.annotation, scope);
-      fields.push({ name: field.id.name, valueType: fieldType });
+      fields.push({ name: field.id.name, valueType: fieldType, offset });
+      offset += this.sizeOf(fieldType);
     }
-    scope.define(node.id.name, { type: "struct", name: node.id.name, fields });
+    scope.define(node.id.name, {
+      type: "struct",
+      name: node.id.name,
+      fields,
+      size: offset,
+    });
     // A declaration has no type itself.
     return { type: "empty" };
   }
@@ -465,7 +472,7 @@ class TypeChecker {
     return actual;
   }
 
-  _expectNumeric(node: AstNode, scope: SymbolTable): SymbolType {
+  expectNumeric(node: AstNode, scope: SymbolTable): SymbolType {
     const type = this.tc(node, scope);
     if (!(type.type === "f64" || type.type === "i32")) {
       throw new DiagnosticError(
@@ -485,5 +492,15 @@ class TypeChecker {
       );
     }
     return this.typeAstNode(annotation.nodeId, found);
+  }
+
+  sizeOf(type: SymbolType): number {
+    switch (type.type) {
+      case "struct":
+      case "i32":
+        return 4;
+      default:
+        throw new Error(`Unhandled field type: ${type}`);
+    }
   }
 }
