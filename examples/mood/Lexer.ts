@@ -108,6 +108,16 @@ class Lexer {
       */
       const char = code[this.position];
       switch (char) {
+        case "/":
+          if (code[this.position + 1] === "/") {
+            this.position += 2;
+            while (code[this.position] !== "\n") {
+              this.position++;
+            }
+          } else {
+            this.literal(char);
+          }
+          break;
         case " ":
         case "\t":
           this.position++;
@@ -126,7 +136,6 @@ class Lexer {
         case "+":
         case "-":
         case "*":
-        case "/":
         case ".":
         case "_":
           this.literal(char);
