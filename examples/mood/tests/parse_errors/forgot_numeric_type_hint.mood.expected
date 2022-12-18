@@ -1,0 +1,15 @@
+-----------------
+INPUT
+----------------- 
+pub fn test(): i32 {
+  42
+}
+-----------------
+OUTPUT
+-----------------
+Error: Expected a number literal to be followed by a type hint.:
+ --> forgot_numeric_type_hint.mood:3:1
+
+  |   42
+3 | }
+  | ^ Expected a numeric type hint like "_i32" or "_f32"

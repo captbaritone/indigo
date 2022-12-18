@@ -20,7 +20,7 @@ import {
   StructFieldConstruction,
   MemberExpression,
 } from "./ast";
-import { Location, union } from "./Location";
+import { Location, union, firstChar } from "./Location";
 import DiagnosticError, { annotate } from "./DiagnosticError";
 import { Token, lex, IdentifierToken, NumberToken } from "./lexer";
 
@@ -388,7 +388,17 @@ class Parser {
     const next = this.peek();
     if (next.type === "Number") {
       const value = this.parseNumber();
-      this.expect("_");
+      if (this.peek().type !== "_") {
+        throw new DiagnosticError(
+          "Expected a number literal to be followed by a type hint.",
+          annotate(
+            firstChar(this.peek().loc),
+            `Expected a numeric type hint like "_i32" or "_f32"`,
+          ),
+        );
+      } else {
+        this.next();
+      }
       const annotation = this.parseNumericType();
       return {
         type: "Literal",
