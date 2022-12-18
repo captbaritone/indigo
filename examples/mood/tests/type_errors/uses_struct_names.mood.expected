@@ -1,0 +1,21 @@
+-----------------
+INPUT
+----------------- 
+struct Foo {
+  x: i32,
+}
+
+pub fn test(): i32 {
+  let foo: i32 = Foo { x: 100_i32 };
+  200_i32
+}
+-----------------
+OUTPUT
+-----------------
+Error: Expected "i32", got "Foo":
+ --> uses_struct_names.mood:6:18
+
+  | pub fn test(): i32 {
+6 |   let foo: i32 = Foo { x: 100_i32 };
+  |                  ^^^^^^^^^^^^^^^^^^ Expected "i32".
+  |   200_i32

@@ -468,7 +468,9 @@ class TypeChecker {
         node = node.expressions[node.expressions.length - 1];
       }
       throw new DiagnosticError(
-        `Expected "${type.type}", got "${actual.type}"`,
+        `Expected "${this.getTypeName(type)}", got "${this.getTypeName(
+          actual,
+        )}"`,
         annotate(node.loc, `Expected "${type.type}".`),
       );
     }
@@ -476,6 +478,22 @@ class TypeChecker {
       throw new Error("TODO: Check function types");
     }
     return actual;
+  }
+
+  getTypeName(type: SymbolType): string {
+    switch (type.type) {
+      case "f64":
+      case "i32":
+      case "bool":
+      case "function":
+      case "empty":
+        return type.type;
+      case "enum":
+      case "struct":
+        return type.name;
+      default:
+        throw new Error(`Unknown type: ${type.type}`);
+    }
   }
 
   expectNumeric(node: AstNode, scope: SymbolTable): SymbolType {

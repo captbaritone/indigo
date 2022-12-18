@@ -1,0 +1,8 @@
+struct Foo {
+  x: i32,
+}
+
+pub fn test(): i32 {
+  let foo: i32 = Foo { x: 100_i32 };
+  200_i32
+}
