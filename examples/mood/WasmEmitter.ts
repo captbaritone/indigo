@@ -97,12 +97,12 @@ export class WasmEmitter {
           exp.drop();
         });
         */
-      exp.globalGet(nextHeapPointerIndex);
-      exp.globalSet(this._heapPointerIndex);
-      exp.localGet(0 /* size */);
-      exp.globalGet(nextHeapPointerIndex);
-      exp.i32Add();
-      exp.globalSet(nextHeapPointerIndex);
+      // exp.globalGet(nextHeapPointerIndex);
+      // exp.globalSet(this._heapPointerIndex);
+      // exp.localGet(0 /* size */);
+      // exp.globalGet(nextHeapPointerIndex);
+      // exp.i32Add();
+      // exp.globalSet(nextHeapPointerIndex);
     };
     // TODO: Reenable malloc once we add heap allocations.
     /*
@@ -152,27 +152,18 @@ export class WasmEmitter {
   private emitCallExpression(ast: CallExpression) {
     const returnType = this.lookupAstNode(ast.nodeId);
     const offset = this._stackOffset;
+    for (const arg of ast.args) {
+      this.emit(arg);
+    }
     if (returnType.type === "struct") {
       // Allocate space for the struct on the stack.
       this._stackOffset += returnType.size;
       this.exp.globalGet(this.fp); // Destination...
-      // Allocate space for the struct on the stack.
       this.exp.i32Const(offset);
       this.exp.i32Sub();
-    }
-    for (const arg of ast.args) {
-      this.emit(arg);
+      // Compute the absolute address of the struct.
     }
     this.exp.call(this.getFunction(ast.callee.name));
-    if (returnType.type === "struct") {
-      this.exp.i32Const(returnType.size);
-      this.exp.memoryCopy();
-
-      // Return the pointer to the struct.
-      this.exp.globalGet(this.fp);
-      this.exp.i32Const(offset);
-      this.exp.i32Sub();
-    }
   }
 
   emitStructConstruction(ast: StructConstruction) {
@@ -337,6 +328,19 @@ export class WasmEmitter {
       locals.set(param.name.name, i);
     }
 
+    let returnArg: { size: number; index: number } | null = null;
+
+    // Functions which return structs have a hidden argument which is
+    // a pointer to the struct on the parent function's stack frame.
+    // The prologue will be responsible for copying the struct from
+    // the child stack frame to the parent stack frame, and leaving the
+    // new pointer on the Wasm stack.
+    const returnType = this.lookupAstNode(ast.returnType.nodeId);
+    if (returnType.type === "struct") {
+      returnArg = { index: params.length, size: returnType.size };
+      params.push(NumType.I32);
+    }
+
     const signature = {
       params,
       results: [this.lookupAstNodeNumType(ast.returnType.nodeId)],
@@ -345,7 +349,7 @@ export class WasmEmitter {
 
     const index = this.ctx.declareFunction(signature, (func) => {
       this._stackOffset = 0;
-      this.emitPrologue(ast, func);
+      this.emitPrologue(ast, func, returnArg);
       this._locals = locals;
       this.exp = func.exp;
       this.func = func;
@@ -355,25 +359,53 @@ export class WasmEmitter {
           "TODO: Implement proper stack frame size calculation. Right now we just assume 500 bytes",
         );
       }
-      this.emitEpilogue(ast, func);
+      this.emitEpilogue(ast, func, returnArg);
     });
 
     // TODO: This won't be compatible with recursive functions.
     this.defineFunction(name, index);
   }
 
-  emitPrologue(ast: FunctionDeclaration, func: FunctionContext) {
+  emitPrologue(
+    ast: FunctionDeclaration,
+    func: FunctionContext,
+    returnArg: { index: number; size: number } | null,
+  ) {
+    // If a function returns a struct, the epilogue will be responsible
+    // will be responsible for copying into the caller's stack frame.
+    // That requires that the Wasm stack end:
+    // - Address in parent's stack frame
+    // - Address in child's stack frame
+    // The code for the function will leave the address in the child's
+    // stack frame on the Wasm stack, so we must push the parent's stack
+    // frame address _before_ we emit code for the actual function body.
+    if (returnArg != null) {
+      func.exp.localGet(returnArg.index);
+    }
     func.exp.globalGet(this.fp);
     func.exp.i32Const(STACK_FRAME_SIZE);
     func.exp.i32Sub();
     func.exp.globalSet(this.fp);
   }
 
-  emitEpilogue(ast: FunctionDeclaration, func: FunctionContext) {
+  emitEpilogue(
+    ast: FunctionDeclaration,
+    func: FunctionContext,
+    returnArg: { index: number; size: number } | null,
+  ) {
     func.exp.globalGet(this.fp);
     func.exp.i32Const(500);
     func.exp.i32Add();
     func.exp.globalSet(this.fp);
+    // If the function returns a struct, we must copy the struct from
+    // this function's stack frame to the parent's stack frame. And leave
+    // the address of the struct in the parent's stack frame on the Wasm
+    // stack.
+    if (returnArg != null) {
+      this.exp.i32Const(returnArg.size);
+      this.exp.memoryCopy();
+      this.exp.localGet(returnArg.index);
+    }
   }
 
   emitProgram(ast: Program) {
@@ -394,6 +426,7 @@ export class WasmEmitter {
     }
   }
 
+  // Note, this does not actually modify the function
   defineLocal(name: string, index: number) {
     this._locals.set(name, index);
   }
