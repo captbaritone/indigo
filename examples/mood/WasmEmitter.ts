@@ -347,26 +347,38 @@ export class WasmEmitter {
       exportName: ast.public ? name : null,
     };
 
+    const functionType = this.lookupAstNode(ast.nodeId);
+    if (functionType.type !== "function") {
+      throw new Error("Expected function type");
+    }
+
+    const stackSize = functionType.stackSize;
+
     const index = this.ctx.declareFunction(signature, (func) => {
       this._stackOffset = 0;
       this._locals = locals;
       this.exp = func.exp;
       this.func = func;
-      this.emitPrologue(returnArg);
+      this.emitPrologue(stackSize, returnArg);
       this.emit(ast.body);
-      if (this._stackOffset > STACK_FRAME_SIZE) {
+      if (this._stackOffset != stackSize) {
         throw new Error(
-          "TODO: Implement proper stack frame size calculation. Right now we just assume 500 bytes",
+          `Mismatch between calculated stack frame size and size allocated. ` +
+            `TypeChecker computed ${stackSize} bytes but WasmEmitter ` +
+            `allocated ${this._stackOffset} bytes.`,
         );
       }
-      this.emitEpilogue(returnArg);
+      this.emitEpilogue(stackSize, returnArg);
     });
 
     // TODO: This won't be compatible with recursive functions.
     this.defineFunction(name, index);
   }
 
-  emitPrologue(returnArg: { index: number; size: number } | null) {
+  emitPrologue(
+    stackSize: number,
+    returnArg: { index: number; size: number } | null,
+  ) {
     // If a function returns a struct, the epilogue will be responsible
     // will be responsible for copying into the caller's stack frame.
     // That requires that the Wasm stack end:
@@ -379,14 +391,17 @@ export class WasmEmitter {
       this.exp.localGet(returnArg.index);
     }
     this.exp.globalGet(this.fp);
-    this.exp.i32Const(STACK_FRAME_SIZE);
+    this.exp.i32Const(stackSize);
     this.exp.i32Sub();
     this.exp.globalSet(this.fp);
   }
 
-  emitEpilogue(returnArg: { index: number; size: number } | null) {
+  emitEpilogue(
+    stackSize: number,
+    returnArg: { index: number; size: number } | null,
+  ) {
     this.exp.globalGet(this.fp);
-    this.exp.i32Const(500);
+    this.exp.i32Const(stackSize);
     this.exp.i32Add();
     this.exp.globalSet(this.fp);
     // If the function returns a struct, we must copy the struct from

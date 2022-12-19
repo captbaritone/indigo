@@ -22,6 +22,7 @@ export type FunctionSymbol = {
   type: "function";
   params: SymbolType[];
   result: SymbolType;
+  stackSize: number;
 };
 
 export type StructField = {

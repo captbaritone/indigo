@@ -44,6 +44,7 @@ function addBuiltinTypes(scope: SymbolTable): void {
 
 class TypeChecker {
   _typeTable: TypeTable;
+  _stackSize: number = 0;
   constructor(typeTable: TypeTable) {
     this._typeTable = typeTable;
   }
@@ -258,6 +259,9 @@ class TypeChecker {
     for (const [i, arg] of node.args.entries()) {
       this.expectType(arg, func.params[i], scope);
     }
+    if (func.result.type === "struct") {
+      this._stackSize += func.result.size;
+    }
     return this.typeAstNode(node.nodeId, func.result);
   }
 
@@ -359,6 +363,7 @@ class TypeChecker {
       this.typeAstNode(field.name.nodeId, fieldType.valueType);
       this.expectType(field.value, fieldType.valueType, scope);
     }
+    this._stackSize += struct.size;
     return this.typeAstNode(node.nodeId, struct);
   }
 
@@ -398,13 +403,21 @@ class TypeChecker {
     const result = this.fromAnnotation(node.returnType, scope);
     this.typeAstNode(node.returnType.nodeId, result);
 
-    scope.define(node.id.name, {
+    this._stackSize = 0;
+
+    this.expectType(node.body, result, functionScope);
+
+    const functionType = {
       type: "function",
       params,
       result,
-    });
+      stackSize: this._stackSize,
+    } as const;
+    // Note: This may not be compatible with recursion.
+    scope.define(node.id.name, functionType);
 
-    this.expectType(node.body, result, functionScope);
+    this.typeAstNode(node.nodeId, functionType);
+
     // A declaration has no type itself.
     return { type: "empty" };
   }
