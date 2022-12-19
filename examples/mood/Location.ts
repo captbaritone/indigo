@@ -5,6 +5,16 @@ export type Location = {
   end: Position;
 };
 
+export function firstChar(location: Location): Location {
+  return {
+    start: location.start,
+    end: {
+      offset: location.start.offset + 1,
+      line: location.start.line,
+      column: location.start.column + 1,
+    },
+  };
+}
 export function lastChar(location: Location): Location {
   return {
     start: {

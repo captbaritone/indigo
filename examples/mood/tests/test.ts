@@ -1,4 +1,6 @@
 import compile from "../compiler";
+import * as Parser from "../Parser";
+import * as TypeChecker from "../typechecker";
 import path from "path";
 import getWabt from "wabt";
 import TestRunner from "./TestRunner";
@@ -12,7 +14,7 @@ async function main() {
   let failures = false;
   for (const { fixturesDir, transformer } of testDirs) {
     const runner = new TestRunner(fixturesDir, write, filterRegex, transformer);
-    failures = (await runner.run()) || failures;
+    failures = !(await runner.run()) || failures;
   }
   if (failures) {
     process.exit(1);
@@ -33,6 +35,14 @@ const testDirs = [
     fixturesDir: path.join(__dirname, "evaluate"),
     transformer: async (code: string, fileName: string) => {
       const binary = compile(code);
+      /*
+      const wabt = await wabtPromise;
+      const myModule = wabt.readWasm(binary, {
+        readDebugNames: true,
+        bulk_memory: true,
+      });
+      console.log(myModule.toText({ foldExprs: false, inlineExport: false }));
+      */
       const instance = new WebAssembly.Instance(
         new WebAssembly.Module(binary),
         {},
@@ -42,6 +52,21 @@ const testDirs = [
       }
       // @ts-ignore
       return String(instance.exports.test());
+    },
+  },
+  {
+    fixturesDir: path.join(__dirname, "parse_errors"),
+    transformer: async (code: string, fileName: string) => {
+      Parser.parse(code);
+      return "OK";
+    },
+  },
+  {
+    fixturesDir: path.join(__dirname, "type_errors"),
+    transformer: async (code: string, fileName: string) => {
+      const ast = Parser.parse(code);
+      TypeChecker.typeCheck(ast);
+      return "OK";
     },
   },
 ];

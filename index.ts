@@ -746,6 +746,21 @@ export class ExpressionContext {
     this._bytes.push(0x40);
     this._bytes.push(0x00); // Memory index. Always 0 in current version of WebAssembly.
   }
+
+  /**
+   * Expects three arguments on the stack, all i32:
+   *
+   * 1. The destination address
+   * 2. The source address
+   * 3. The number of bytes to copy
+   */
+  memoryCopy() {
+    this._bytes.push(0xfc);
+    this._writeU32(10);
+    this._bytes.push(0x00);
+    this._bytes.push(0x00);
+  }
+
   /**
    * MemArg ::= align:u32 offset:u32
    */

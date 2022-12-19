@@ -4,6 +4,7 @@ import {
   AstNode,
   BinaryExpression,
   BlockExpression,
+  CallExpression,
   ExpressionPath,
   FunctionDeclaration,
   Literal,
@@ -23,6 +24,7 @@ export function emit(ctx: ModuleContext, ast: AstNode, typeTable: TypeTable) {
   emitter.emit(ast);
 }
 
+const STACK_FRAME_SIZE = 500;
 export class WasmEmitter {
   ctx: ModuleContext;
   func: FunctionContext;
@@ -32,9 +34,9 @@ export class WasmEmitter {
   _functions: Map<string, number> = new Map();
   _mallocIndex: number;
   _heapPointerIndex: number;
-  bsp: number; // Base stack pointer
-  sp: number; // Stack pointer
+  fp: number; // Frame pointer
   _locals: Map<string, number>;
+  _stackOffset: number = 0;
   constructor(ctx: ModuleContext, typeTable: TypeTable) {
     this.ctx = ctx;
     this._typeTable = typeTable;
@@ -46,10 +48,7 @@ export class WasmEmitter {
 
   _defineBuiltins() {
     const i32Mut = { type: NumType.I32, mut: Mut.VAR };
-    this.bsp = this.ctx.declareGlobal(i32Mut, (init) => {
-      init.i32Const(5000);
-    });
-    this.sp = this.ctx.declareGlobal(i32Mut, (init) => {
+    this.fp = this.ctx.declareGlobal(i32Mut, (init) => {
       init.i32Const(5000);
     });
     /*
@@ -134,11 +133,7 @@ export class WasmEmitter {
       case "BinaryExpression":
         return this.emitBinaryExpression(ast);
       case "CallExpression":
-        for (const arg of ast.args) {
-          this.emit(arg);
-        }
-        this.exp.call(this.getFunction(ast.callee.name));
-        break;
+        return this.emitCallExpression(ast);
       case "ExpressionPath":
         return this.emitExpressionPath(ast);
       case "VariableDeclaration":
@@ -154,39 +149,55 @@ export class WasmEmitter {
     }
   }
 
+  private emitCallExpression(ast: CallExpression) {
+    const returnType = this.lookupAstNode(ast.nodeId);
+    const offset = this._stackOffset;
+    if (returnType.type === "struct") {
+      // Allocate space for the struct on the stack.
+      this._stackOffset += returnType.size;
+      this.exp.globalGet(this.fp); // Destination...
+      // Allocate space for the struct on the stack.
+      this.exp.i32Const(offset);
+      this.exp.i32Sub();
+    }
+    for (const arg of ast.args) {
+      this.emit(arg);
+    }
+    this.exp.call(this.getFunction(ast.callee.name));
+    if (returnType.type === "struct") {
+      this.exp.i32Const(returnType.size);
+      this.exp.memoryCopy();
+
+      // Return the pointer to the struct.
+      this.exp.globalGet(this.fp);
+      this.exp.i32Const(offset);
+      this.exp.i32Sub();
+    }
+  }
+
   emitStructConstruction(ast: StructConstruction) {
-    // TODO: Consider using a local for the stack pointer
     const structType = this.lookupAstNode(ast.nodeId);
     if (structType.type !== "struct") {
       throw new Error("Expected struct type");
     }
 
-    // Allocate space for the struct on the stack by moving the stack pointer
-    // down by the size of the struct (subtract)
-    this.exp.globalGet(this.sp);
-    this.exp.i32Const(structType.size);
-    this.exp.i32Sub();
-    this.exp.globalSet(this.sp);
+    const structOffset = this._stackOffset;
 
-    // We then write the struct fields to the stack, starting at the new stack
-    // pointer and working our way up. So, the first field is written at the
-    // stack pointer, the second field is written at the stack pointer + 4, etc.
-    //
-    // Note: We rely on stable object iteration order here for stable output, but since
-    // offsets are pre-computed, the order doesn't strictly matter for correctness.
     for (const field of Object.values(structType.fields)) {
-      this.exp.globalGet(this.sp);
+      this.exp.globalGet(this.fp);
       const value = ast.fields.find((f) => f.name.name === field.name);
       if (value == null) {
         throw new Error(`Missing field.`);
       }
       this.emit(value.value);
-      this.exp.i32Store(field.offset, 0);
+      this.exp.i32Store(field.offset + structOffset, 0);
     }
+    this._stackOffset += structType.size;
 
-    // Finally, we return the stack pointer, which is now pointing to the
-    // beginning of the struct.
-    this.exp.globalGet(this.sp);
+    // Return the absolute address of the struct.
+    this.exp.globalGet(this.fp);
+    this.exp.i32Const(structOffset);
+    this.exp.i32Add();
   }
 
   emitMemberExpression(ast: MemberExpression) {
@@ -333,63 +344,36 @@ export class WasmEmitter {
     };
 
     const index = this.ctx.declareFunction(signature, (func) => {
-      this.emitPrelude(ast, func);
+      this._stackOffset = 0;
+      this.emitPrologue(ast, func);
       this._locals = locals;
       this.exp = func.exp;
       this.func = func;
       this.emit(ast.body);
-      this.emitPostlude(ast, func);
+      if (this._stackOffset > STACK_FRAME_SIZE) {
+        throw new Error(
+          "TODO: Implement proper stack frame size calculation. Right now we just assume 500 bytes",
+        );
+      }
+      this.emitEpilogue(ast, func);
     });
 
     // TODO: This won't be compatible with recursive functions.
     this.defineFunction(name, index);
   }
 
-  // Responsible for setting the stack pointer to the base of the stack frame.
-  // Also pushes the previous stack pointer onto the stack which will be
-  // consumed by the postlude.
-  emitPrelude(ast: FunctionDeclaration, func: FunctionContext) {
-    // Save the previous function's base stack pointer.
-    // This will stay on the stack until the postlude.
-    func.exp.globalGet(this.bsp);
-
-    // Set the base stack pointer to the current stack pointer.
-    // It looks to me like C uses a local for the current frame's stack pointer.
-    // Maybe that's more efficient?
-    func.exp.globalGet(this.sp);
-    func.exp.globalSet(this.bsp);
+  emitPrologue(ast: FunctionDeclaration, func: FunctionContext) {
+    func.exp.globalGet(this.fp);
+    func.exp.i32Const(STACK_FRAME_SIZE);
+    func.exp.i32Sub();
+    func.exp.globalSet(this.fp);
   }
 
-  // Responsible for resetting the stack pointer to the previous frame's base pointer.
-  // The previous frame's base pointer is left on the stack by the prelude. However it's
-  // on the stack _before_ the return value. So we need to:
-  // 1. Pop the return value off the stack and into a local
-  // 2. Pop the previous frame's base pointer off the stack and into the global
-  // 3. Push the return value back onto the stack
-  emitPostlude(ast: FunctionDeclaration, func: FunctionContext) {
-    const resultTypes = func.getResults();
-    if (resultTypes.length > 1) {
-      throw new Error("We don't support multiple return types");
-    }
-    if (resultTypes.length === 0) {
-      // Reset the stack pointer to the previous frame's base pointer.
-      func.exp.globalSet(this.bsp);
-    } else {
-      const resultType = resultTypes[0];
-      // At this point, we know that no locals are live any more.
-      // So, as an optimization, we will try to the first local that matches the
-      // return type as a place to stash the return value. If one does not exist,
-      // we will define a new one.
-      const index =
-        func.findLocalOfType(resultType) ?? func.defineLocal(resultType);
-
-      // Define a local for temporarily placing the return value in.
-      // Note: As an optimization we could use the first param as the return local
-      // if the types match.
-      func.exp.localSet(index);
-      func.exp.globalSet(this.bsp);
-      func.exp.localGet(index);
-    }
+  emitEpilogue(ast: FunctionDeclaration, func: FunctionContext) {
+    func.exp.globalGet(this.fp);
+    func.exp.i32Const(500);
+    func.exp.i32Add();
+    func.exp.globalSet(this.fp);
   }
 
   emitProgram(ast: Program) {

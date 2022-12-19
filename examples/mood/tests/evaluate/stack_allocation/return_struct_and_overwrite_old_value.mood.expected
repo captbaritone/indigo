@@ -1,0 +1,28 @@
+-----------------
+INPUT
+----------------- 
+struct Foo {
+    x: i32,
+}
+
+fn other(x: i32): Foo {
+  Foo { x: x }
+}
+
+pub fn test(): i32 {
+    // This should allocate an instance of Foo in the `other`
+    // function's stack frame, and then return a pointer to it.
+    // The epilogue should then copy that value into the stack
+    let foo: Foo = other(10_i32);
+    // other will allocate a new Foo on the stack (in the space freed after the
+    // previous call), and then return a pointer to it.
+    // This time the epilogue will copy the value into a different location on
+    // the stack.
+    other(20_i32);
+    // foo.x should be 10, not 20
+    foo.x
+}
+-----------------
+OUTPUT
+-----------------
+10
