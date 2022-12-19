@@ -349,28 +349,24 @@ export class WasmEmitter {
 
     const index = this.ctx.declareFunction(signature, (func) => {
       this._stackOffset = 0;
-      this.emitPrologue(ast, func, returnArg);
       this._locals = locals;
       this.exp = func.exp;
       this.func = func;
+      this.emitPrologue(returnArg);
       this.emit(ast.body);
       if (this._stackOffset > STACK_FRAME_SIZE) {
         throw new Error(
           "TODO: Implement proper stack frame size calculation. Right now we just assume 500 bytes",
         );
       }
-      this.emitEpilogue(ast, func, returnArg);
+      this.emitEpilogue(returnArg);
     });
 
     // TODO: This won't be compatible with recursive functions.
     this.defineFunction(name, index);
   }
 
-  emitPrologue(
-    ast: FunctionDeclaration,
-    func: FunctionContext,
-    returnArg: { index: number; size: number } | null,
-  ) {
+  emitPrologue(returnArg: { index: number; size: number } | null) {
     // If a function returns a struct, the epilogue will be responsible
     // will be responsible for copying into the caller's stack frame.
     // That requires that the Wasm stack end:
@@ -380,23 +376,19 @@ export class WasmEmitter {
     // stack frame on the Wasm stack, so we must push the parent's stack
     // frame address _before_ we emit code for the actual function body.
     if (returnArg != null) {
-      func.exp.localGet(returnArg.index);
+      this.exp.localGet(returnArg.index);
     }
-    func.exp.globalGet(this.fp);
-    func.exp.i32Const(STACK_FRAME_SIZE);
-    func.exp.i32Sub();
-    func.exp.globalSet(this.fp);
+    this.exp.globalGet(this.fp);
+    this.exp.i32Const(STACK_FRAME_SIZE);
+    this.exp.i32Sub();
+    this.exp.globalSet(this.fp);
   }
 
-  emitEpilogue(
-    ast: FunctionDeclaration,
-    func: FunctionContext,
-    returnArg: { index: number; size: number } | null,
-  ) {
-    func.exp.globalGet(this.fp);
-    func.exp.i32Const(500);
-    func.exp.i32Add();
-    func.exp.globalSet(this.fp);
+  emitEpilogue(returnArg: { index: number; size: number } | null) {
+    this.exp.globalGet(this.fp);
+    this.exp.i32Const(500);
+    this.exp.i32Add();
+    this.exp.globalSet(this.fp);
     // If the function returns a struct, we must copy the struct from
     // this function's stack frame to the parent's stack frame. And leave
     // the address of the struct in the parent's stack frame on the Wasm
