@@ -42,6 +42,7 @@ export type EnumSymbol = {
   type: "enum";
   name: string;
   variants: { name: string; valueType: SymbolType | null }[];
+  size: number;
 };
 
 /**

@@ -277,13 +277,21 @@ class TypeChecker {
   }
 
   tcEnumDeclaration(node: EnumDeclaration, scope: SymbolTable): SymbolType {
+    // Start with four bytes for the tag.
+    let size = 4;
+    const variants = node.variants.map((variant) => {
+      const valueType = this.tcVariantDeclarationValue(variant, scope);
+      size = Math.max(valueType == null ? 0 : this.sizeOf(valueType));
+      return {
+        name: variant.id.name,
+        valueType,
+      };
+    });
     scope.define(node.id.name, {
       type: "enum",
       name: node.id.name,
-      variants: node.variants.map((variant) => ({
-        name: variant.id.name,
-        valueType: this.tcVariantDeclarationValue(variant, scope),
-      })),
+      variants,
+      size,
     });
     // A declaration has no type itself.
     return { type: "empty" };
@@ -533,9 +541,12 @@ class TypeChecker {
 
   sizeOf(type: SymbolType): number {
     switch (type.type) {
-      case "struct":
       case "i32":
         return 4;
+      case "struct":
+        return type.size;
+      case "enum":
+        return type.size;
       default:
         throw new Error(`Unhandled field type: ${type}`);
     }
