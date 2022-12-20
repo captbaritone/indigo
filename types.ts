@@ -1,5 +1,3 @@
-import { ExpressionContext } from ".";
-
 /**
  * Number types are encoded by a single byte.
  *
@@ -98,6 +96,7 @@ export type Code = {
 
 export type Expression = number[];
 
+// TODO: Support function types as specified by an index in the types section.
 export type BlockType =
   | {
       kind: "EMPTY";
