@@ -10,11 +10,36 @@ export type Expression =
   | BlockExpression
   | VariableDeclaration
   | StructConstruction
-  | MemberExpression;
+  | MemberExpression
+  | MatchExpression;
 
 export type Program = {
   type: "Program";
   body: Declaration[];
+  loc: Location;
+};
+
+export type MatchExpression = {
+  type: "MatchExpression";
+  value: Expression;
+  cases: MatchCase[];
+  loc: Location;
+  nodeId: number;
+};
+
+export type MatchCase = {
+  type: "MatchCase";
+  pattern: MatchPattern;
+  expression: Expression;
+  loc: Location;
+  nodeId: number;
+};
+
+export type MatchPattern = {
+  type: "MatchPattern";
+  head: Identifier;
+  tail: Identifier;
+  arg: Identifier | null;
   loc: Location;
 };
 
