@@ -125,6 +125,7 @@ ${actual}`;
       if (e instanceof DiagnosticError) {
         return e.asCodeFrame(code, filename);
       }
+      console.error(e);
       return e.message;
     }
   }
