@@ -565,9 +565,10 @@ export class ExpressionContext {
   nop() {
     this._bytes.push(0x01);
   }
-  block() {
+  block(blockType: BlockType, body: (exp: ExpressionContext) => void) {
     this._bytes.push(0x02);
-    throw new Error("Not implemented");
+    this._writeBlockType(blockType);
+    body(this);
     this._bytes.push(0x0b);
   }
   loop() {
@@ -599,14 +600,17 @@ export class ExpressionContext {
   ifElse() {
     throw new Error("Unimplemented");
   }
-  br() {
-    throw new Error("Unimplemented");
+  br(labelIndex: number) {
+    this._bytes.push(0x0c);
+    this._writeU32(labelIndex);
   }
   brIf() {
     throw new Error("Unimplemented");
   }
-  brTable() {
-    throw new Error("Unimplemented");
+  brTable(labelIndexes: number[], defaultLabelIndex: number) {
+    this._bytes.push(0x0e);
+    this._writeVecU32(labelIndexes);
+    this._writeU32(defaultLabelIndex);
   }
   return() {
     this._bytes.push(0x0f);
@@ -1005,6 +1009,13 @@ export class ExpressionContext {
 
   _writeU32(n: number) {
     Encoding.appendU32(this._bytes, n);
+  }
+
+  _writeVecU32<T>(elements: number[]) {
+    this._writeU32(elements.length);
+    for (const element of elements) {
+      this._writeU32(element);
+    }
   }
 
   _writeI32(n: number) {
