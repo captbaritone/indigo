@@ -1,3 +1,5 @@
+import { DiagnosticCategory } from "typescript";
+import DiagnosticError, { annotate } from "./DiagnosticError";
 import { Location } from "./Location";
 
 type Keyword =
@@ -6,6 +8,7 @@ type Keyword =
   | "pub"
   | "if"
   | "else"
+  | "match"
   | "while"
   | "return"
   | "enum"
@@ -26,7 +29,8 @@ type Syntax =
   | "*"
   | "/"
   | "."
-  | "_";
+  | "_"
+  | "=>";
 
 export type IdentifierToken = {
   type: "Identifier";
@@ -47,11 +51,7 @@ export type EofToken = {
 
 export type Token =
   | {
-      type: Keyword;
-      loc: Location;
-    }
-  | {
-      type: Syntax;
+      type: Keyword | Syntax;
       loc: Location;
     }
   | IdentifierToken
@@ -143,6 +143,8 @@ class Lexer {
         case "=":
           if (code[this.position + 1] === "=") {
             this.literal("==");
+          } else if (code[this.position + 1] === ">") {
+            this.literal("=>");
           } else {
             this.literal("=");
           }
@@ -188,6 +190,16 @@ class Lexer {
             code[this.position + 2] === "t"
           ) {
             this.literal("let");
+            break;
+          }
+        case "m":
+          if (
+            code[this.position + 1] === "a" &&
+            code[this.position + 2] === "t" &&
+            code[this.position + 3] === "c" &&
+            code[this.position + 4] === "h"
+          ) {
+            this.literal("match");
             break;
           }
         case "p":
@@ -261,7 +273,10 @@ class Lexer {
             });
             break;
           }
-          throw new Error("Failed to progress reading char " + char);
+          throw new DiagnosticError(
+            "Failed to progress reading char " + char,
+            annotate(this.loc(), "Unexpected char"),
+          );
       }
       this.lastPosition = this.position;
       this.lastLine = this.line;
