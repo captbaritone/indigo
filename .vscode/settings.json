@@ -5,6 +5,7 @@
     "pegjs",
     "Rotr",
     "struct",
-    "valtypes"
+    "valtypes",
+    "wabt"
   ]
 }
